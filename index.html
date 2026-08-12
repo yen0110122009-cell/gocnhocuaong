@@ -426,9 +426,10 @@ body[data-role="Guest"] .guest-disabled{opacity:.58;cursor:not-allowed}
 
   <!-- PHẦN CẢM XÚC TỨC THỜI (REAL-TIME EMOTION) - KHÔNG BỊ THU GỌN KHI BẤM ONG 🐝 -->
   <div class="card keep-visible" id="homeRealtimeMoodCard" style="margin-bottom:18px;border-color:var(--red);">
-    <h2>🎨 Cảm xúc của bạn bây giờ (Real-time Emotion)</h2>
-    <p class="muted">Chọn nhanh tâm trạng tức thời để giao diện tự động đồng bộ bảng màu toàn trang web ngay lập tức!</p>
+    <h2>🎨 Cảm xúc của bạn bây giờ</h2>
+    <p class="muted">Chọn nhanh cảm xúc hiện tại để giao diện tự động đồng bộ bảng màu toàn trang web.</p>
     <div class="mood" id="homeRealtimeMoodButtons" style="margin-top:10px"></div>
+    <div id="emotionEncouragementBox" class="quote" style="margin-top:12px;font-style:italic;display:none"></div>
     <div class="guest-only-note" style="display:none;margin-top:12px;padding:10px 12px;border-radius:12px;background:var(--pink);border:1px solid var(--red);color:var(--ink);font-size:13px">👤 <b>Chế độ khách:</b> chỉ được xem giao diện và thử chuyển màu. Các công cụ, nhập liệu, lưu dữ liệu và lệnh tự động đều bị khóa.</div>
     
   </div>
@@ -466,11 +467,7 @@ body[data-role="Guest"] .guest-disabled{opacity:.58;cursor:not-allowed}
     <div class="card"><h2>📝 Việc hôm nay</h2><div id="todayTodos"></div></div>
     <div class="card"><h3>📅 Lịch hôm nay</h3><div id="todaySchedule"></div></div>
   </div>
-  <div class="grid g3" style="margin-top:18px">
-    <div class="card">
-      <h3>💗 Tâm trạng hôm nay</h3><div id="homeMood"></div>
-      <div id="homeMotivationBox" class="quote" style="margin-top:12px;font-style:italic"></div>
-    </div>
+  <div class="grid g2" style="margin-top:18px">
     <div class="card">
       <h3>🔥 Chuỗi ngày liên tiếp</h3>
       <div id="streak"></div>
@@ -1094,7 +1091,7 @@ Object.keys(defaultState).forEach(k=>{if(state[k]===undefined)state[k]=defaultSt
    Hồ sơ/tài khoản, cấp bậc và dữ liệu quản trị vẫn là dữ liệu hệ thống;
    kế hoạch, nhật ký, thói quen, cảm xúc, khoảnh khắc, thành tích mở khóa, XP...
    được lưu theo memberId cố định. */
-const USER_DATA_KEYS=['todos','sessions','goals','habits','habitArchive','moods','schedules','journals','moments','pomo','trash','sheetLinks','xp','level','streak','bestStreak','bestTasks','bestXPDay','todayXP','todayActivities','activities','lastActivityDate','unlockedAchievements','activityDates','timeline','questClaims','customAchievements','customQuests','dailyQuestDate','dailyQuestSeed','memberZones','achievementBadgePrefs','monthlyHabitXPClaims','adminStudyTimes','privateXPHistory','customMoods'];
+const USER_DATA_KEYS=['todos','sessions','goals','habits','habitArchive','moods','schedules','journals','moments','pomo','trash','sheetLinks','xp','level','streak','bestStreak','bestTasks','bestXPDay','todayXP','todayActivities','activities','lastActivityDate','unlockedAchievements','activityDates','timeline','questClaims','customAchievements','customQuests','dailyQuestDate','dailyQuestSeed','memberZones','achievementBadgePrefs','monthlyHabitXPClaims','adminStudyTimes','privateXPHistory','customMoods','currentEmotion'];
 const USER_DATA_VERSION=2;
 function accountOwnerId(auth=state.sessionAuth){
   if(!auth || auth.role==='Guest') return null;
@@ -1343,6 +1340,16 @@ function checkAuthSession(){
   } else {
     $('authScreen').style.display = 'none';
     setupNavAndAdminRole();
+    applyStoredEmotionTheme();
+  }
+}
+function applyStoredEmotionTheme(){
+  // 🎨 Khôi phục cảm xúc đã chọn của đúng tài khoản sau khi đăng nhập / tải lại trang.
+  const saved=state.currentEmotion;
+  const def=realtimeThemeDefs.find(m=>m.name===saved);
+  if(def){
+    activeThemeMood=def.name;
+    document.body.className=def.theme;
   }
 }
 
@@ -2841,12 +2848,8 @@ function renderHome(){
     $('todayTodos').innerHTML=todosToday.map(x=>`<div class="todo ${x.done?'done':''}"><div class="title">${esc(x.title)}</div><span>${x.done?'☑️':'⬜'}</span></div>`).join('')||'<div class="empty">Hôm nay chưa có việc.</div>';
     $('todaySchedule').innerHTML=state.schedules.filter(x=>x.date===d).sort((a,b)=>(a.time||'').localeCompare(b.time||'')).map(x=>`<div class="todo"><b>${x.time||'—'}</b><div class="title">${esc(x.title)}</div></div>`).join('')||'<div class="empty">Chưa có lịch.</div>';
     
-    const mo=state.moods.find(x=>x.date===d);
-    $('homeMood').innerHTML=mo?`${mo.emoji} ${esc(mo.name)}<br><span class="muted">${esc(mo.note||'')}</span>`:'Chưa ghi cảm xúc hôm nay.';
-    
-    const moodMots = state.customMotivations && state.customMotivations.length ? state.customMotivations : ['Mỗi cảm xúc đều đáng được lắng nghe. 🍀'];
-    const randMot = moodMots[Math.floor(Math.random()*moodMots.length)];
-    $('homeMotivationBox').innerHTML = `"${esc(randMot)}"`;
+    // 🎨 Cảm xúc của bạn bây giờ đã thay thế hoàn toàn "Tâm trạng hôm nay" cũ.
+    renderEmotionEncouragement();
 
     $('streak').innerHTML=`<b style="font-size:32px;color:var(--red)">${state.streak}</b> ngày liên tiếp có hoạt động thực tế. <br><span class="tag" style="margin-top:6px;display:inline-block">✨ Dựa trên hành động thực tế</span>`;
     const completionMots = state.completionMotivations && state.completionMotivations.length ? state.completionMotivations : ['Mỗi ngày tích lũy thêm một chút, bạn sẽ đạt được mục tiêu lớn! 🐝🍀'];
@@ -3243,12 +3246,56 @@ const realtimeThemeDefs=[
 ];
 function selectThemeMood(name,className){
   /* Nhấn lần 1: đổi theme. Nhấn lần 2 cùng cảm xúc: quay về Vui.
-     Không sửa state.moods và không localStorage. */
+     Đây là cảm xúc TỨC THỜI để đổi giao diện — hoàn toàn tách biệt khỏi
+     XP, Study Time, Achievement, Badge, Role, Bảng xếp hạng. */
   const safeClass = realtimeThemeDefs.find(m=>m.name===name)?.theme || className || 'theme-vui';
   if(activeThemeMood===name && name!=='Vui'){ activeThemeMood='Vui'; document.body.className='theme-vui'; }
   else { activeThemeMood=name; document.body.className=safeClass; }
   document.body.dataset.role = state.sessionAuth ? state.sessionAuth.role : 'Guest';
+  state.currentEmotion=activeThemeMood; // 🔒 chỉ đổi giao diện + lời nhắn, không đụng XP/Study/Achievement/Role/Leaderboard
+  if(state.sessionAuth) save(); // lưu riêng theo tài khoản đang đăng nhập, khôi phục được sau reload
   renderHome();
+  renderEmotionEncouragement();
+}
+const EMOTION_ENCOURAGEMENT={
+  'Vui':'Thật tuyệt khi hôm nay bạn đang vui. Hãy tận hưởng khoảnh khắc này và để nguồn năng lượng tích cực ấy lan tỏa nhé. 💛',
+  'Bình yên':'Thật tốt khi bạn đang cảm thấy bình yên. Hãy tận hưởng khoảng lặng này và cho bản thân một chút thời gian để thở. 🌿',
+  'Buồn':'Không sao nếu hôm nay bạn buồn. Bạn không cần phải ổn ngay lập tức. Hãy cho bản thân thời gian và tiến từng bước nhỏ thôi nhé. 💙',
+  'Đau lòng':'Có những lúc trái tim cần được nghỉ ngơi. Đừng ép mình phải mạnh mẽ ngay lúc này, hãy nhẹ nhàng với chính mình nhé. ❤️‍🩹',
+  'Lo lắng':'Đừng quên tự ghi nhận những điều nhỏ bé mà bạn đã hoàn thành hôm nay. Bạn không cần giải quyết mọi thứ cùng một lúc. Hãy hít thở và đi từng bước một nhé. 🌿',
+  'Tức giận':'Hãy cho bản thân một khoảng dừng. Cảm xúc của bạn là điều có thật, nhưng bạn vẫn có thể chọn cách phản hồi bình tĩnh hơn. 🌱',
+  'Mệt mỏi':'Bạn đã cố gắng đủ nhiều rồi. Hãy cho mình một chút thời gian nghỉ ngơi. Nghỉ ngơi không phải bỏ cuộc, mà là nạp lại năng lượng. 🫶',
+  'Cô đơn':'Bạn không cần phải tự mình chịu đựng mọi thứ. Hãy nhớ rằng một khoảng thời gian cô đơn không định nghĩa giá trị của bạn. 🌷',
+  'Hy vọng':'Hãy giữ lấy tia hy vọng nhỏ bé đó. Một bước nhỏ hôm nay cũng có thể đưa bạn đến một ngày tốt đẹp hơn. ☀️',
+  'Hứng khởi':'Nguồn năng lượng này thật tuyệt! Hãy tận dụng nó để bắt đầu điều bạn đang mong muốn và biến ý tưởng thành hành động. 🚀',
+  'Tập trung':'Bạn đang có một trạng thái rất tốt để tiến về phía trước. Hãy chọn một việc quan trọng và hoàn thành từng bước thật chắc chắn. 🎯',
+  'Biết ơn':'Thật đẹp khi bạn nhận ra những điều đáng trân trọng. Hãy giữ lại cảm giác này và để lòng biết ơn mang đến thêm nhiều điều tích cực. 💛',
+  'Yêu đời':'Hãy tận hưởng nguồn năng lượng tuyệt vời này. Những khoảnh khắc nhỏ khiến bạn yêu cuộc sống chính là những điều rất đáng trân trọng. 🌸',
+  'Phát khóc':'Nếu bạn cần khóc, hãy để cảm xúc được giải tỏa. Bạn không cần phải che giấu cảm xúc của mình. Hãy nhẹ nhàng với bản thân nhé. ❤️‍🩹',
+  'Phấn chấn':'Bạn đang có một nguồn năng lượng thật tuyệt! Hãy biến sự phấn chấn này thành một hành động nhỏ nhưng có ý nghĩa ngay hôm nay. ✨',
+  'Thư giãn':'Hãy chậm lại một chút. Không phải mọi thứ đều cần được hoàn thành ngay bây giờ. Hít thở sâu và tận hưởng khoảnh khắc hiện tại. 🌿',
+  'Chán nản':'Không phải ngày nào cũng cần thật năng suất. Nếu hôm nay bạn thiếu động lực, hãy bắt đầu bằng một việc thật nhỏ. Bạn vẫn đang tiến về phía trước. 🌱',
+  'Tự hào':'Bạn có quyền tự hào về những gì mình đã làm được. Hãy nhìn lại hành trình của mình và ghi nhận những nỗ lực của chính bạn. 🏆',
+  'Xấu hổ':'Ai cũng có những khoảnh khắc khiến mình ngại ngùng. Một khoảnh khắc không định nghĩa con người bạn. Hãy cho bản thân cơ hội bước tiếp. 🌷',
+  'Bất an':'Hãy quay về với những điều bạn có thể kiểm soát ngay lúc này. Hít thở chậm, tập trung vào hiện tại và tiến từng bước nhỏ. 🌿',
+  'Ngạc nhiên':'Cuộc sống đôi khi mang đến những điều thật bất ngờ. Hãy cho bản thân một chút thời gian để đón nhận và khám phá điều đang xảy ra nhé. ✨',
+  'Bực bội':'Bạn có thể cho mình một khoảng nghỉ trước khi tiếp tục. Không phải mọi chuyện đều cần được giải quyết ngay lập tức. Hãy bình tĩnh lại và bắt đầu từ điều bạn có thể kiểm soát. 🌿',
+  'Chạnh lòng':'Cảm xúc này cho thấy bạn đang thật sự quan tâm. Hãy cho phép mình cảm nhận nó và đối xử với bản thân bằng sự dịu dàng. 💗',
+  'Mất mát':'Mất mát có thể để lại một khoảng trống rất lớn. Hãy cho bản thân thời gian để cảm nhận, nghỉ ngơi và bước tiếp theo nhịp độ của riêng mình. ❤️‍🩹',
+  'Có động lực':'Bạn đang có một nguồn năng lượng rất đáng quý. Hãy chọn một mục tiêu và bắt đầu bằng một bước nhỏ ngay bây giờ. Bạn làm được! 💪',
+  'Yêu bản thân':'Bạn cũng xứng đáng nhận được sự quan tâm mà bạn dành cho người khác. Hãy đối xử với chính mình bằng sự tử tế và yêu thương nhé. 🫶'
+};
+function renderEmotionEncouragement(){
+  const box=$('emotionEncouragementBox'); if(!box) return;
+  if(!activeThemeMood || activeThemeMood==='Vui' && !state.currentEmotion){
+    // Chưa từng chọn cảm xúc nào trong phiên/ tài khoản này -> không hiện lời nhắn mặc định.
+  }
+  const chosen = state.currentEmotion || (activeThemeMood!=='Vui' ? activeThemeMood : '');
+  if(!chosen){ box.style.display='none'; box.innerHTML=''; return; }
+  const msg=EMOTION_ENCOURAGEMENT[chosen];
+  if(!msg){ box.style.display='none'; box.innerHTML=''; return; }
+  box.style.display='block';
+  box.innerHTML=`<b>💬 Lời nhắn dành cho bạn</b><div style="margin-top:8px">${esc(msg)}</div>`;
 }
 
 function bindRealtimeMoodButtons(){
@@ -3646,7 +3693,7 @@ function executeAutomationCommands(cmdText){
       const aliases={ADD_HABIT:'HABIT',CREATE_HABIT:'HABIT',ADD_COMFORT:'COMFORT',ADD_MOOD:'MOOD_DEF',ADD_MOOD_DEF:'MOOD_DEF',ADD_MOTIVATION:'MOTIVATION',TASK:'TODO',PLAN:'TODO',STUDY:'STUDY_TIME'};
       type=aliases[type]||type;
     try{
-      const adminCommands=['MOOD_DEF','COMFORT','MOTIVATION','SUPER_MIND','SUPER_ME','HOME_MOTIVATION','COMPLETION_MOTIVATION','STUDY_TIME'];
+      const adminCommands=['MOOD_DEF','COMFORT','MOTIVATION','SUPER_MIND','SUPER_ME','COMPLETION_MOTIVATION','STUDY_TIME'];
       if(adminCommands.includes(type) && !['Admin','Founder'].includes(role)){
         throw new Error('Lệnh này chỉ dành cho Quản trị viên.');
       }
@@ -3688,8 +3735,6 @@ function executeAutomationCommands(cmdText){
         state.superMinds=state.superMinds||[]; state.superMinds.push(p.slice(1).join('|').trim()); count++;
       }else if(type==='SUPER_ME' && p.slice(1).join('|').trim()){
         state.superMes=state.superMes||[]; state.superMes.push(p.slice(1).join('|').trim()); count++;
-      }else if(type==='HOME_MOTIVATION' && p.slice(1).join('|').trim()){
-        state.customMotivations=state.customMotivations||[]; state.customMotivations.push(p.slice(1).join('|').trim()); count++;
       }else if(type==='COMPLETION_MOTIVATION' && p.slice(1).join('|').trim()){
         state.completionMotivations=state.completionMotivations||[]; state.completionMotivations.push(p.slice(1).join('|').trim()); count++;
       }else if(type==='ROLE'){
@@ -3876,8 +3921,7 @@ window.showCommandHelp=function(){
     ['9. MOTIVATION 🔒 ADMIN','MOTIVATION|Hạng 1|Lời động viên','Thêm một lời động viên. Một hạng có thể có nhiều lời.'],
     ['10. SUPER_MIND 🔒 ADMIN','SUPER_MIND|Gợi ý tư duy sâu','Thêm một gợi ý tư duy sâu.'],
     ['11. SUPER_ME 🔒 ADMIN','SUPER_ME|Thử thách hành động nhanh','Thêm một thử thách nhỏ có thể làm ngay.'],
-    ['12. HOME_MOTIVATION 🔒 ADMIN','HOME_MOTIVATION|Lời động viên','Thêm lời động viên cho khu vực Tâm trạng hôm nay.'],
-    ['13. COMPLETION_MOTIVATION 🔒 ADMIN','COMPLETION_MOTIVATION|Lời động viên','Thêm lời động viên cho khu vực Tổng hợp hoàn thành.'],
+    ['12. COMPLETION_MOTIVATION 🔒 ADMIN','COMPLETION_MOTIVATION|Lời động viên','Thêm lời động viên cho khu vực Tổng hợp hoàn thành.'],
     ['15. STUDY_TIME 🔒 ADMIN','STUDY_TIME|Tên tài khoản|Số phút (+/-)|Ngày (tùy chọn)','+90 để cộng 90 phút; -30 để trừ 30 phút. Nếu bỏ ngày, hệ thống ghi ngày hôm qua; không ghi vào ngày hiện tại/tương lai. Liên kết trực tiếp với bảng xếp hạng thời gian học.']
   );
   if(isFounder) lines.push(
@@ -4116,8 +4160,8 @@ function renderComparison(){
     </div>`;
 }
 function updateFounderStudyVisibility(){
-  const isFounder = state.sessionAuth?.role === 'Founder';
-  document.querySelectorAll('.founder-study-only').forEach(el=>{ el.style.display = isFounder ? '' : 'none'; });
+  const canSeeSubjectStats = ['Admin','Founder'].includes(state.sessionAuth?.role);
+  document.querySelectorAll('.founder-study-only').forEach(el=>{ el.style.display = canSeeSubjectStats ? '' : 'none'; });
   const recent=document.querySelectorAll('#studySessions'); recent.forEach(el=>{ const card=el.closest('.card'); if(card) card.style.display=''; });
 }
 
@@ -4503,7 +4547,7 @@ function renderPrivateXPHistoryAdmin(){
     const todos=(Array.isArray(bucket.todos)?bucket.todos:[]).filter(t=>dateInRange(t.date,start,end));
     const doneTodos=todos.filter(t=>t.done===true).length; const todoPct=todos.length?Math.round(doneTodos/todos.length*100):0;
     let habitDone=0,habitPossible=0; let d=new Date(start+'T12:00:00'),e=new Date(end+'T12:00:00');
-    while(d<=e){const ym=d.toISOString().slice(0,7);const date=d.toISOString().slice(0,10);(bucket.habits?.[ym]||[]).forEach(h=>{habitPossible++;if(h.days?.[date])habitDone++;});d.setDate(d.getDate()+1);}
+    while(d<=e){const ym=toISODate(d).slice(0,7);const dayNum=d.getDate();(bucket.habits?.[ym]||[]).forEach(h=>{habitPossible++;if(h.days?.[dayNum])habitDone++;});d.setDate(d.getDate()+1);}
     const habitPct=habitPossible?Math.round(habitDone/habitPossible*100):0;
     const logs=Array.isArray(bucket.adminStudyTimes)?bucket.adminStudyTimes:(Array.isArray(state.adminStudyTimes)&&ownerId===String(patchOwnerId())?state.adminStudyTimes:[]);
     const studyLogs=logs.filter(x=>dateInRange(x.date||x.updatedAt?.slice(0,10),start,end));
