@@ -1,0 +1,11 @@
+{
+  "js_syntax": true,
+  "role_origin": true,
+  "role_edit": true,
+  "admin_collapse": true,
+  "achievement_renderer": true,
+  "original_preview_preserved": true,
+  "ai_schema_fields": true,
+  "duplicate_ids": {},
+  "js_error": ""
+}
