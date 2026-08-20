@@ -873,3 +873,14 @@ html,body{overflow-x:hidden}
   .journey-entry-image,.journey-entry-image img{min-height:190px;max-height:280px}
 }
 @media (prefers-reduced-motion:reduce){.journey-entry,.journey-image-preview{scroll-behavior:auto}}
+
+
+/* Founder permission matrix */
+.founder-permission-group{margin-top:12px;padding:12px;border:1px solid rgba(185,139,53,.28);border-radius:14px;background:rgba(255,255,255,.58)}
+.founder-permission-group h4{margin:0 0 8px;color:#805d17;font-size:15px}
+.founder-permission-list{display:grid;gap:7px}
+.founder-permission-row{display:flex;gap:9px;align-items:flex-start;padding:8px 9px;border-radius:10px;background:rgba(255,255,255,.72)}
+.founder-permission-check{display:inline-flex;align-items:center;justify-content:center;flex:0 0 20px;width:20px;height:20px;border-radius:50%;background:#2d8a58;color:#fff;font-weight:800;font-size:12px}
+.founder-permission-row b{font-size:13px}
+.founder-permission-row .muted{margin-top:2px;font-size:12px;line-height:1.45}
+@media (max-width:600px){.founder-permission-group{padding:9px}.founder-permission-row{padding:7px}.founder-permission-row .muted{font-size:11px}}
