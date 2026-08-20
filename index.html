@@ -88,6 +88,29 @@
     <div class="grid g4" id="homeProgressSummary" style="margin-top:10px"></div>
   </div>
 
+  <!-- BẢNG ĐIỀU KHIỂN HÔM NAY — đọc state hiện tại, không tạo schema mới -->
+  <section id="todayDashboard" class="today-dashboard card" aria-labelledby="todayDashboardTitle">
+    <div class="today-dashboard-head">
+      <div>
+        <span class="today-dashboard-kicker">🐝 NHỊP HỌC HÔM NAY</span>
+        <h2 id="todayDashboardTitle">Bảng điều khiển Hôm nay</h2>
+        <p id="todayDashboardSubtitle" class="muted">Đang tổng hợp dữ liệu học tập, việc cần làm và lịch trình của bạn.</p>
+      </div>
+      <span id="todayDashboardSync" class="today-dashboard-sync">Dữ liệu hiện tại</span>
+    </div>
+    <div id="todayDashboardStats" class="today-dashboard-stats" aria-live="polite"></div>
+    <div class="today-dashboard-columns">
+      <div class="today-dashboard-panel">
+        <div class="today-dashboard-panel-head"><h3>🎯 Việc cần ưu tiên</h3><span id="todayDashboardTodoCount" class="tag"></span></div>
+        <div id="todayDashboardTodos" class="today-dashboard-list"></div>
+      </div>
+      <div class="today-dashboard-panel">
+        <div class="today-dashboard-panel-head"><h3>📅 Lịch sắp tới</h3><span id="todayDashboardScheduleCount" class="tag"></span></div>
+        <div id="todayDashboardSchedule" class="today-dashboard-list"></div>
+      </div>
+    </div>
+  </section>
+
   <!-- CHỈ SỐ HIỆN TẠI - KHÔNG BỊ THU GỌN KHI BẤM ONG 🐝 -->
   <div class="grid g4 keep-visible" id="homeStats"></div>
 

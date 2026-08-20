@@ -1960,6 +1960,50 @@ function renderFounderSubjectStats(){
   el.innerHTML=entries.length ? entries.map(([subject,min])=>`<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--line)"><b>📚 ${esc(subject)}</b><span>${fmtMin(min)}</span></div>`).join('') : '<div class="empty">Chưa có dữ liệu thời gian học theo môn.</div>';
 }
 
+function renderTodayDashboard(){
+  const host=$('todayDashboard');
+  if(!host)return;
+  const d=todayISO();
+  const todos=Array.isArray(state.todos)?state.todos.filter(x=>x&&x.date===d):[];
+  const schedules=Array.isArray(state.schedules)?state.schedules.filter(x=>x&&x.date===d):[];
+  const currentYM=ymISO();
+  const habits=Array.isArray(state.habits?.[currentYM])?state.habits[currentYM]:[];
+  const ownerId=accountOwnerId();
+  const mins=ownerId?studyMinutesForDate(ownerId,d):0;
+  const goalMin=Math.max(1,Number(state.goals?.day)||120);
+  const doneTodos=todos.filter(x=>x.done).length;
+  const pendingTodos=todos.length-doneTodos;
+  const todoPct=todos.length?Math.min(100,Math.round(doneTodos/todos.length*100)):0;
+  const studyPct=Math.min(100,Math.round(mins/goalMin*100));
+  const habitTarget=habits.reduce((sum,h)=>sum+Math.max(0,Number(h?.target)||0),0);
+  const habitDone=habits.reduce((sum,h)=>sum+Object.values(h?.days||{}).filter(Boolean).length,0);
+  const habitPct=habitTarget?Math.min(100,Math.round(habitDone/habitTarget*100)):0;
+  const priorityWeight={cao:0,trung:1,thap:2};
+  const orderedTodos=[...todos].sort((a,b)=>Number(Boolean(a.done))-Number(Boolean(b.done)) || (priorityWeight[a.priority]??3)-(priorityWeight[b.priority]??3) || String(a.time||'').localeCompare(String(b.time||'')));
+  const orderedSchedules=[...schedules].sort((a,b)=>String(a.time||'').localeCompare(String(b.time||'')));
+  const statRows=[
+    {value:`${pendingTodos}`,label:'Việc còn lại',progress:null},
+    {value:`${doneTodos}/${todos.length}`,label:`Việc hoàn thành (${todoPct}%)`,progress:todoPct},
+    {value:fmtMin(mins),label:`Thời gian học / ${fmtMin(goalMin)}`,progress:studyPct},
+    {value:`${habitDone}/${habitTarget}`,label:`Lượt thói quen (${habitPct}%)`,progress:habitPct}
+  ];
+  const statBox=(row)=>`<div class="today-dashboard-stat"><strong>${esc(row.value)}</strong><span>${esc(row.label)}</span>${row.progress===null?'':`<div class="progress" aria-label="${esc(row.label)}"><i style="width:${row.progress}%"></i></div>`}</div>`;
+  const todoLabel=(x)=>x.done?'Đã xong':(x.priority==='cao'?'Ưu tiên cao':x.priority==='trung'?'Ưu tiên trung bình':'Chưa hoàn thành');
+  const todoRows=orderedTodos.slice(0,5).map(x=>`<div class="today-dashboard-item ${x.done?'done':''}"><span class="today-dashboard-item-marker">${x.done?'✓':'○'}</span><div class="today-dashboard-item-main"><div class="today-dashboard-item-title">${esc(x.title||'Việc chưa đặt tên')}</div><div class="today-dashboard-item-meta">${esc([x.time,todoLabel(x)].filter(Boolean).join(' • '))}</div></div></div>`).join('');
+  const scheduleRows=orderedSchedules.slice(0,5).map(x=>`<div class="today-dashboard-item"><span class="today-dashboard-item-marker">🕒</span><div class="today-dashboard-item-main"><div class="today-dashboard-item-title">${esc(x.title||'Lịch chưa đặt tên')}</div><div class="today-dashboard-item-meta">${esc(x.time||'Cả ngày')}${x.note?` • ${esc(x.note)}`:''}</div></div></div>`).join('');
+  const more=(count)=>count>5?`<div class="today-dashboard-more">Còn ${count-5} mục trong dữ liệu hôm nay.</div>`:'';
+  const formatDate=new Date(d+'T12:00:00').toLocaleDateString('vi-VN',{weekday:'long',day:'numeric',month:'numeric'});
+  $('todayDashboardSubtitle').textContent=`Tóm tắt ${formatDate} từ dữ liệu hiện tại của tài khoản.`;
+  $('todayDashboardSync').textContent='State hiện tại • đồng bộ nền';
+  $('todayDashboardStats').innerHTML=statRows.map(statBox).join('');
+  $('todayDashboardTodoCount').textContent=`${todos.length} mục`;
+  $('todayDashboardScheduleCount').textContent=`${schedules.length} lịch`;
+  $('todayDashboardTodos').innerHTML=todoRows||'<div class="empty">Hôm nay chưa có việc cần ưu tiên.</div>';
+  $('todayDashboardSchedule').innerHTML=scheduleRows||'<div class="empty">Hôm nay chưa có lịch trình.</div>';
+  $('todayDashboardTodos').insertAdjacentHTML('beforeend',more(todos.length));
+  $('todayDashboardSchedule').insertAdjacentHTML('beforeend',more(schedules.length));
+}
+
 function renderHome(){
     const restoredEmotion=state.currentEmotion||null;
     if(restoredEmotion && realtimeThemeDefs.some(m=>m.name===restoredEmotion)){
@@ -1999,6 +2043,8 @@ function renderHome(){
         <div class="stat"><b>${totalHabitDone}/${totalHabitTarget}</b><span>Thói quen (${habitPct}%)</span><div class="progress"><i style="width:${habitPct}%"></i></div></div>
         <div class="stat"><b>${overallPct}%</b><span>Tiến độ tổng hợp</span><div class="progress"><i style="width:${overallPct}%"></i></div></div>
     `;
+
+    renderTodayDashboard();
 
     let totalAchCount = 0;
     defaultAchievementGroups.forEach(g => totalAchCount += g.items.length);
