@@ -139,8 +139,15 @@ state.membersList=(state.membersList||[]).filter(m=>!SAMPLE_MEMBER_IDS.has(Strin
 state.memberAccounts=(state.memberAccounts||[]).filter(a=>!SAMPLE_MEMBER_IDS.has(String(a.memberId)));
 if(state.userData?.accounts){SAMPLE_MEMBER_IDS.forEach(id=>delete state.userData.accounts[id]);}
 const SESSION_KEY='study_tracker_session_v1';
+const REMEMBER_SESSION_KEY='study_tracker_remembered_session_v1';
 try{state.sessionAuth=JSON.parse(sessionStorage.getItem(SESSION_KEY)||'null');}catch(e){state.sessionAuth=null;}
-function setSessionAuth(auth){
+if(!state.sessionAuth){
+  try{
+    const remembered=JSON.parse(localStorage.getItem(REMEMBER_SESSION_KEY)||'null');
+    if(remembered && remembered.role && remembered.code){state.sessionAuth=remembered;sessionStorage.setItem(SESSION_KEY,JSON.stringify(remembered));}
+  }catch(e){try{localStorage.removeItem(REMEMBER_SESSION_KEY);}catch(ignore){}}
+}
+function setSessionAuth(auth,options={}){
   const previous=state.sessionAuth;
   const previousId=previous?.memberId||null;
   const nextId=auth?.memberId||null;
@@ -148,7 +155,11 @@ function setSessionAuth(auth){
     try{persistActiveUserData();}catch(e){console.warn('Không thể lưu bucket trước khi đổi tài khoản',e);}
   }
   state.sessionAuth=auth||null;
-  try{if(auth)sessionStorage.setItem(SESSION_KEY,JSON.stringify(auth));else sessionStorage.removeItem(SESSION_KEY);}catch(e){}
+  try{
+    if(auth)sessionStorage.setItem(SESSION_KEY,JSON.stringify(auth));else sessionStorage.removeItem(SESSION_KEY);
+    if(auth && options.remember)localStorage.setItem(REMEMBER_SESSION_KEY,JSON.stringify(auth));
+    if(!auth || !options.remember)localStorage.removeItem(REMEMBER_SESSION_KEY);
+  }catch(e){}
 }
 function saveStateWithoutSession(){
   const copy=cloneValue(state);
@@ -422,7 +433,8 @@ function completeLoginSession(auth){
     const account=findMemberAccount(auth);
     if(account) auth={...auth,name:account.name,code:account.code,memberId:account.memberId};
   }
-  setSessionAuth(auth);
+  const remember=Boolean($('rememberLogin')?.checked);
+  setSessionAuth(auth,{remember});
   switchUserData(state.sessionAuth);
   /* Lưu local ngay, nhưng không render lại toàn trang và không chờ cloud. */
   save({render:false,deferCloud:true});
@@ -568,7 +580,7 @@ function setupNavAndAdminRole(){
   let baseNav = [
       ['home','🏠 Tổng quan'],['endday','🌙 Kết ngày'],['todo','📋 Kế hoạch'],['study','⏱️ Học tập'],
       ['achievements','🏆 Thành tích'],['habit','🍀 Thói quen'],['mood','💗 Cảm xúc'],
-      ['schedule','🗓️ Lịch'],['moments','📸 Khoảnh khắc'],['journal','📖 Nhật ký'],['summary','📊 Tổng kết'],['compare','🏆 Bảng xếp hạng'],['data','🤖 Dữ liệu'],['trash','🗑️ Thùng rác'],['profile','👤 Profile']
+      ['schedule','🗓️ Lịch'],['moments','📸 Khoảnh khắc'],['journey','🖼️ Hành trình'],['journal','📖 Nhật ký'],['summary','📊 Tổng kết'],['compare','🏆 Bảng xếp hạng'],['data','🤖 Dữ liệu'],['trash','🗑️ Thùng rác'],['profile','👤 Profile']
     ];
   if(['Admin','Founder'].includes(role)) baseNav.splice(1,0,['admin',role==='Founder'?'🛡️ Quản trị':'👑 Quản trị']);
   $('nav').innerHTML=baseNav.map(([id,t])=>`<button type="button" class="navbtn" data-go="${id}">${t}</button>`).join('');
@@ -656,6 +668,8 @@ function renderAdminView(){
   const founderOnly = state.sessionAuth.role==='Founder';
   document.querySelectorAll('.founder-only-admin-card').forEach(el=>el.style.display=founderOnly?'':'none');
   normalizeStateAccounts();
+  const repaired=reconcileMemberAccountRecords();
+  if(repaired)save({render:false});
   if(founderOnly) renderCustomRoles();
   const container=$('adminMemberListContainer');
   if(!container) return;
@@ -670,6 +684,7 @@ function renderAdminView(){
         <div>
           <b>${m.role==='Founder'?'🛡️':m.role==='Admin'?'👑':'👤'} ${esc(m.name)}</b> <span class="tag">${esc(m.role||'Member')}</span>${renderRoleBadges(m.id)}${renderPublicAchievementBadges(m.id)}${renderPublicZoneBadges(m.id)}
           <div class="kpi">Mã: <b>${esc(code)}</b> | ${m.locked?'🔒 Đang khóa':'✨ Đang hoạt động'}</div>
+          <div class="kpi">Tiến độ: <b>${Number(getAdminProgress(m.id,a).xp)||0} XP</b> · ${Number(getAdminProgress(m.id,a).activities)||0} hoạt động · ${Number(getAdminProgress(m.id,a).studyMinutes)||0} phút học</div>
           <div style="font-size:11px;color:var(--muted)">${esc(m.lastActive||'Chưa đăng nhập')}</div>
         </div>
         <div class="actions">
@@ -680,6 +695,29 @@ function renderAdminView(){
         </div>
       </div>`;
     }).join('') : '<p class="muted">Chưa có mã thành viên nào. Hãy nhấn “Cấp mã thành viên mới”.</p>');
+}
+
+function getAdminProgress(memberId,account){
+  const bucket=state.userData?.accounts?.[String(memberId)]||state.userData?.accounts?.[memberId]||{};
+  const source=account?.progress||{};
+  return {xp:Number(bucket.xp??source.xp??0)||0,activities:Number(bucket.activities??source.activities??0)||0,studyMinutes:Number(bucket.studyMinutes??source.studyMinutes??0)||0};
+}
+function reconcileMemberAccountRecords(){
+  if(!Array.isArray(state.memberAccounts))state.memberAccounts=[];
+  if(!Array.isArray(state.membersList))state.membersList=[];
+  let changed=false;
+  state.memberAccounts.forEach(account=>{
+    if(!account?.memberId)return;
+    let member=state.membersList.find(x=>String(x.id)===String(account.memberId));
+    if(!member){
+      member={id:account.memberId,name:account.name||'Thành viên',role:account.role||'Member',status:account.lastActive==='Đã đăng xuất'?'Đã đăng xuất':'Chưa đăng nhập',currentAction:'Chưa bắt đầu',lastActive:account.lastActive||'Chưa đăng nhập',locked:Boolean(account.locked),code:account.code,password:account.password||null};
+      state.membersList.push(member);changed=true;
+    }
+    const next={name:account.name||member.name,role:account.role||member.role||'Member',code:account.code,locked:Boolean(account.locked)};
+    Object.entries(next).forEach(([key,value])=>{if(member[key]!==value){member[key]=value;changed=true;}});
+    if(account.lastActive && member.lastActive!==account.lastActive){member.lastActive=account.lastActive;changed=true;}
+  });
+  return changed;
 }
 
 function adminIssueMemberCode(){
@@ -740,7 +778,7 @@ function adminViewMember(id){
   const m = state.membersList.find(x => String(x.id) === String(id));
   if(!m) return;
   const a=state.memberAccounts.find(x=>String(x.memberId)===String(m.id));
-  const p=a?.progress||{};
+  const p=getAdminProgress(m.id,a);
   showModal(`👤 Thông tin thành viên: ${m.name}`, `
     <p><b>Tên:</b> ${esc(m.name)}</p>
     <p><b>memberId liên kết:</b> <code>${esc(a?.memberId||m.id||'—')}</code></p>
@@ -2814,6 +2852,92 @@ function renderMoments(){
     `).join('') : '<div class="empty">📸 Chưa có khoảnh khắc đáng nhớ nào. Hãy tự lưu một khoảnh khắc thật đáng tự hào nhé! 🐝🍀</div>';
 }
 
+/* JOURNEY & PHOTO MEMORY — dùng lại state.moments, không tạo key/schema mới */
+function journeyRows(){return (Array.isArray(state.moments)?state.moments:[]).filter(x=>x && x.type==='journey');}
+function readJourneyImage(file){
+  return new Promise((resolve,reject)=>{
+    if(!file || !String(file.type||'').startsWith('image/')) return reject(new Error('Vui lòng chọn một tệp ảnh hợp lệ.'));
+    if(file.size>12*1024*1024) return reject(new Error('Ảnh vượt quá 12 MB. Hãy chọn ảnh nhỏ hơn để trang không bị chậm.'));
+    const reader=new FileReader();
+    reader.onerror=()=>reject(new Error('Không thể đọc tệp ảnh.'));
+    reader.onload=()=>{
+      const img=new Image();
+      img.onerror=()=>reject(new Error('Ảnh không thể được đọc trong trình duyệt.'));
+      img.onload=()=>{
+        const maxSide=1400,scale=Math.min(1,maxSide/Math.max(img.naturalWidth||img.width,img.naturalHeight||img.height));
+        const canvas=document.createElement('canvas');
+        canvas.width=Math.max(1,Math.round((img.naturalWidth||img.width)*scale));
+        canvas.height=Math.max(1,Math.round((img.naturalHeight||img.height)*scale));
+        const ctx=canvas.getContext('2d');
+        if(!ctx)return reject(new Error('Trình duyệt không hỗ trợ xử lý ảnh.'));
+        ctx.fillStyle='#ffffff';ctx.fillRect(0,0,canvas.width,canvas.height);ctx.drawImage(img,0,0,canvas.width,canvas.height);
+        canvas.toBlob(blob=>{
+          if(!blob)return reject(new Error('Không thể nén ảnh.'));
+          const out=new FileReader();out.onerror=()=>reject(new Error('Không thể tạo bản ảnh lưu trữ.'));out.onload=()=>resolve({data:String(out.result||''),width:canvas.width,height:canvas.height,size:blob.size,mime:'image/jpeg'});out.readAsDataURL(blob);
+        },'image/jpeg',.82);
+      };
+      img.src=String(reader.result||'');
+    };
+    reader.readAsDataURL(file);
+  });
+}
+function renderJourneyPreview(file){
+  const box=$('journeyImagePreview');if(!box)return;
+  if(!file){box.innerHTML='<span>🖼️ Chưa chọn ảnh</span>';return;}
+  const url=URL.createObjectURL(file);box.innerHTML=`<img src="${esc(url)}" alt="Ảnh xem trước hành trình"><span>${esc(file.name)}</span>`;
+}
+function toggleJourneyFields(){
+  const study=$('journeyType')?.value!=='daily';
+  if($('journeyStudyFields'))$('journeyStudyFields').style.display=study?'grid':'none';
+  if($('journeyDailyFields'))$('journeyDailyFields').style.display=study?'none':'grid';
+}
+function clearJourneyForm(){
+  ['journeySubject','journeyTitle','journeyReason','journeyDailyTitle','journeyNote'].forEach(id=>{if($(id))$(id).value='';});
+  if($('journeyDate'))$('journeyDate').value=todayISO();
+  if($('journeyImage'))$('journeyImage').value='';
+  renderJourneyPreview(null);toggleJourneyFields();
+  if($('journeyUploadStatus'))$('journeyUploadStatus').textContent='';
+}
+function openJourneyDetail(id){
+  const row=journeyRows().find(x=>String(x.id)===String(id));if(!row)return;
+  const study=row.journeyType==='study';
+  const body=`<div class="journey-modal-preview">${row.imageData?`<img src="${esc(row.imageData)}" alt="${esc(row.title||'Ảnh hành trình')}">`:''}</div><div class="history-v21-fields"><div class="history-v21-field"><div class="history-v21-label">Loại</div><div class="history-v21-value">${study?'📚 Hành trình học tập':'🌤️ Khoảnh khắc hằng ngày'}</div></div><div class="history-v21-field"><div class="history-v21-label">Ngày</div><div class="history-v21-value">${esc(row.date||'')}</div></div>${study?`<div class="history-v21-field"><div class="history-v21-label">Môn</div><div class="history-v21-value">${esc(row.subject||'Chưa ghi nhận')}</div></div><div class="history-v21-field full"><div class="history-v21-label">Tiêu đề nội dung</div><div class="history-v21-value">${esc(row.title||'')}</div></div><div class="history-v21-field full"><div class="history-v21-label">Lý do tạo ảnh</div><div class="history-v21-value">${esc(row.reason||'Chưa ghi nhận')}</div></div>`:`<div class="history-v21-field full"><div class="history-v21-label">Tiêu đề khoảnh khắc</div><div class="history-v21-value">${esc(row.title||'')}</div></div><div class="history-v21-field full"><div class="history-v21-label">Ghi chú</div><div class="history-v21-value">${esc(row.note||'Chưa ghi nhận')}</div></div>`}</div>`;
+  if(typeof window.openHistoryV21Modal==='function')window.openHistoryV21Modal(`🖼️ ${study?'Hành trình học tập':'Khoảnh khắc hằng ngày'}`,body,'moments',row.id);else showModal('🖼️ Chi tiết hành trình',body);
+}
+function renderJourney(){
+  const box=$('journeyList');if(!box)return;
+  const rows=journeyRows();
+  const count=$('journeyCount');if(count)count.textContent=`${rows.length} ảnh`;
+  box.innerHTML=rows.length?rows.map(row=>{
+    const study=row.journeyType==='study',title=row.title||'Chưa có tiêu đề',subtitle=study?`${row.subject||'Chưa ghi môn'} · ${row.reason||'Chưa ghi lý do'}`:(row.note||'Chưa có ghi chú');
+    return `<article class="journey-entry" data-journey-id="${esc(row.id)}"><div class="journey-entry-image">${row.imageData?`<img loading="lazy" src="${esc(row.imageData)}" alt="${esc(title)}">`:'<span>🖼️</span>'}</div><div class="journey-entry-content"><div class="journey-entry-top"><span class="tag">${study?'📚 Hành trình học tập':'🌤️ Khoảnh khắc hằng ngày'}</span><small class="muted">${esc(row.date||'')}</small></div><h3>${esc(title)}</h3>${study?`<p class="journey-subject"><b>Môn:</b> ${esc(row.subject||'Chưa ghi nhận')}</p>`:''}<p class="journey-entry-note">${esc(subtitle)}</p><div class="actions"><button type="button" class="btn light sm" onclick="openJourneyDetail('${esc(row.id)}')">Mở chi tiết</button><button type="button" class="btn danger sm" onclick="del('moments','${esc(row.id)}')">Xóa</button></div></div></article>`;
+  }).join(''):'<div class="history-v21-empty">🖼️ Chưa có ảnh hành trình. Hãy lưu một dấu mốc đầu tiên của bạn nhé.</div>';
+}
+function setupJourneyForm(){
+  const type=$('journeyType'),file=$('journeyImage'),saveBtn=$('saveJourneyEntry');
+  if(!type||!file||!saveBtn||saveBtn.dataset.bound==='1')return;
+  saveBtn.dataset.bound='1';type.addEventListener('change',toggleJourneyFields);file.addEventListener('change',()=>{renderJourneyPreview(file.files?.[0]||null);if($('journeyUploadStatus'))$('journeyUploadStatus').textContent='';});
+  $('clearJourneyForm')?.addEventListener('click',clearJourneyForm);
+  saveBtn.addEventListener('click',async()=>{
+    if(!state.sessionAuth||state.sessionAuth.role==='Guest'||!accountOwnerId())return alert('🔒 Hãy đăng nhập tài khoản để lưu ảnh hành trình.');
+    const selected=file.files?.[0];if(!selected)return alert('🖼️ Hãy chọn một ảnh trước khi lưu.');
+    const study=type.value!=='daily',date=$('journeyDate')?.value||todayISO(),subject=$('journeySubject')?.value.trim()||'',title=study?($('journeyTitle')?.value.trim()||''):($('journeyDailyTitle')?.value.trim()||''),reason=$('journeyReason')?.value.trim()||'',note=$('journeyNote')?.value.trim()||'';
+    if(study&&!subject)return alert('📚 Hãy ghi tên môn cho ảnh học tập.');
+    if(!title)return alert(study?'📝 Hãy ghi tiêu đề nội dung trong ảnh.':'📝 Hãy ghi tiêu đề khoảnh khắc hằng ngày.');
+    if(!note&&!reason)return alert(study?'💬 Hãy ghi lý do tạo ảnh.':'💬 Hãy ghi chú cho khoảnh khắc hằng ngày.');
+    saveBtn.disabled=true;if($('journeyUploadStatus'))$('journeyUploadStatus').textContent='Đang nén và lưu ảnh…';
+    try{
+      const image=await readJourneyImage(selected);
+      state.moments=Array.isArray(state.moments)?state.moments:[];
+      state.moments.unshift({id:uid(),type:'journey',journeyType:study?'study':'daily',date,title,subject,reason,note,desc:study?reason:note,imageData:image.data,imageMime:image.mime,imageWidth:image.width,imageHeight:image.height,imageSize:image.size,imageName:selected.name,createdAt:new Date().toISOString()});
+      save();clearJourneyForm();renderJourney();if($('journeyUploadStatus'))$('journeyUploadStatus').textContent='✅ Đã lưu ảnh vào hành trình của bạn.';
+    }catch(error){alert(`⚠️ ${error.message||'Không thể lưu ảnh.'}`);if($('journeyUploadStatus'))$('journeyUploadStatus').textContent='';}
+    finally{saveBtn.disabled=false;}
+  });
+  toggleJourneyFields();
+}
+setupJourneyForm();
+
 /* JOURNAL */
 if($('addJournal')){
     $('addJournal').onclick = () => {
@@ -3639,7 +3763,8 @@ function applyPerfPagination(){
     ['scheduleList',':scope > .todo','schedules',12,'lịch'],
     ['summaryAchievementList',':scope > .achievement','summary-achievements',18,'thành tích'],
     ['studyAiInboxList',':scope > .study-ai-card','study-ai-inbox',10,'góp ý'],
-    ['trashList',':scope > .card','trash',12,'mục lưu trữ']
+    ['trashList',':scope > .card','trash',12,'mục lưu trữ'],
+    ['journeyList',':scope > .journey-entry','journey',10,'ảnh']
   ];
   targets.forEach(([id,selector,key,size,label])=>paginatePerfContainer($(id),selector,key,size,label));
   [['#momentsList .history-v21-list','moments-history','khoảnh khắc'],['#journalList .history-v21-list','journal-history','nhật ký'],['#moodHistory .history-v21-list','mood-history','cảm xúc'],['#endDayHistory .history-v21-list','endday-history','kết ngày']].forEach(([selector,key,label])=>paginatePerfContainer(document.querySelector(selector),':scope > .history-v21-item',key,10,label));
@@ -3665,6 +3790,7 @@ function renderCurrentTab(){
     case 'mood':renderMoods();break;
     case 'schedule':renderSchedule();break;
     case 'moments':renderMoments();break;
+    case 'journey':renderJourney();break;
     case 'journal':renderJournals();break;
     case 'summary':renderSummary();renderTimelineSummary();break;
     case 'compare':renderComparison();break;
@@ -3681,6 +3807,7 @@ function hydrateStartupInputs(){
     if($('todoDate')) $('todoDate').value = todayISO();
     if($('schDate')) $('schDate').value = todayISO();
     if($('mDate')) $('mDate').value = todayISO();
+    if($('journeyDate')) $('journeyDate').value = todayISO();
     if($('jDate')) $('jDate').value = todayISO();
     if($('goalDay')) $('goalDay').value = state.goals.day || 120;
     if($('goalWeek')) $('goalWeek').value = state.goals.week || 600;
@@ -3724,6 +3851,7 @@ async function finishCloudStartup(){
 window.onload = async () => {
     /* P0: hiển thị state local trước để không chặn first paint bởi mạng. */
     normalizeStateAccounts();
+    if(state.sessionAuth && state.sessionAuth.role!=='Guest')switchUserData(state.sessionAuth);
     hydrateStartupInputs();
     activateStartupView();
     renderAll();
@@ -3735,6 +3863,7 @@ window.onload = async () => {
     catch(e){console.warn('☁️ Đồng bộ nền thất bại, tiếp tục dùng dữ liệu local.',e);}
     if(cloudLoaded){
       normalizeStateAccounts();
+      if(state.sessionAuth && state.sessionAuth.role!=='Guest')switchUserData(state.sessionAuth);
       hydrateStartupInputs();
       renderAll();
       updateMenu();
