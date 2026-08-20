@@ -1272,13 +1272,37 @@ async function createInitialSupabaseState(){
   return window.studyEmpireCloudSync?.create ? window.studyEmpireCloudSync.create() : false;
 }
 
+let renderFrameId=0;
+let cloudPushTimer=0;
+
+function requestRenderAll(){
+  if(renderFrameId) return;
+  const paint=()=>{
+    renderFrameId=0;
+    try{renderAll();}catch(e){console.error('Lỗi render giao diện',e);}
+  };
+  if(window.requestAnimationFrame) renderFrameId=requestAnimationFrame(paint);
+  else renderFrameId=setTimeout(paint,0);
+}
+
+function scheduleCloudPush(immediate=false){
+  clearTimeout(cloudPushTimer);
+  const push=()=>{
+    cloudPushTimer=0;
+    try{pushStateToServer();}
+    catch(e){console.warn('Không thể xếp hàng đồng bộ cloud',e);}
+  };
+  if(immediate || document.visibilityState==='hidden') push();
+  else cloudPushTimer=setTimeout(push,900);
+}
+
 function save(options={}){
   persistActiveUserData();
   saveStateWithoutSession();
-  if(!options || options.render!==false) renderAll();
-  const push=()=>{try{pushStateToServer()}catch(e){console.warn('Không thể xếp hàng đồng bộ cloud',e)}};
-  if(options && options.deferCloud) setTimeout(push,0); else push();
+  if(!options || options.render!==false) requestRenderAll();
+  scheduleCloudPush(Boolean(options && options.immediateCloud));
 }
+window.addEventListener('pagehide',()=>scheduleCloudPush(true));
 function moveTrash(type,item){
   state.trash=state.trash&&typeof state.trash==='object'?state.trash:{};
   if(!Array.isArray(state.trash[type]))state.trash[type]=[];
@@ -1555,7 +1579,7 @@ function go(id){
 
   location.hash=id;
   updateMenu();
-  renderAll();
+  requestRenderAll();
 }
 
 function adminAddMotivation(){
@@ -4351,8 +4375,6 @@ function renderAll(){
     renderSchedule();
     renderMoments();
     renderTimelineSummary();
-    renderStudySessions();
-    renderFounderSubjectStats();
     renderJournals();
     renderEndDay();
     renderSummary();
