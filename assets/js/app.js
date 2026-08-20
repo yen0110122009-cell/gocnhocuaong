@@ -178,8 +178,11 @@ const USER_DATA_VERSION=2;
 function accountOwnerId(auth=state.sessionAuth){
   if(!auth || auth.role==='Guest') return null;
   if(auth.memberId) return auth.memberId;
-  if(auth.role==='Member') return state.memberAccounts.find(a=>a.code===auth.code)?.memberId||null;
-  return state.membersList.find(m=>m.name===auth.name && m.role===auth.role)?.id||null;
+  if(auth.role==='Member'){
+    const code=String(auth.code||'').trim().toUpperCase();
+    return state.memberAccounts.find(a=>String(a.code||'').trim().toUpperCase()===code)?.memberId||null;
+  }
+  return state.membersList.find(m=>String(m.name||'').trim()===String(auth.name||'').trim() && m.role===auth.role)?.id||null;
 }
 function cloneValue(v){return v===undefined?undefined:JSON.parse(JSON.stringify(v));}
 function daysInMonth(ym){ const m=String(ym||'').match(/^(\d{4})-(\d{2})$/); if(!m)return 31; return new Date(Number(m[1]),Number(m[2]),0).getDate(); }
@@ -381,7 +384,44 @@ function randomMemberCode(){
   return code;
 }
 
+// Tài khoản thành viên được định danh cố định bằng memberId; mã chỉ là thông tin đăng nhập có thể cấp lại.
+function findMemberAccount(auth=state.sessionAuth){
+  if(!auth || auth.role!=='Member') return null;
+  const byId=auth.memberId ? state.memberAccounts.find(a=>String(a.memberId)===String(auth.memberId)) : null;
+  if(byId) return byId;
+  const code=String(auth.code||'').trim().toUpperCase();
+  return code ? state.memberAccounts.find(a=>String(a.code||'').trim().toUpperCase()===code) || null : null;
+}
+function findMemberRecord(auth=state.sessionAuth){
+  const account=findMemberAccount(auth);
+  if(!account) return null;
+  return state.membersList.find(m=>String(m.id)===String(account.memberId)) || null;
+}
+function ensureMemberAccountLink(account){
+  if(!account?.memberId) return null;
+  state.membersList=Array.isArray(state.membersList)?state.membersList:[];
+  let member=state.membersList.find(m=>String(m.id)===String(account.memberId));
+  if(!member){
+    const normalizedName=String(account.name||'').trim().toLocaleLowerCase('vi-VN');
+    member=state.membersList.find(m=>String(m.code||'').trim().toUpperCase()===String(account.code||'').trim().toUpperCase() && String(m.name||'').trim().toLocaleLowerCase('vi-VN')===normalizedName);
+    if(member && !state.membersList.some(m=>String(m.id)===String(account.memberId))) member.id=account.memberId;
+  }
+  if(!member){
+    member={id:account.memberId,name:account.name||'Thành viên',role:account.role||'Member',status:'Chưa đăng nhập',currentAction:'Chưa bắt đầu',lastActive:'Chưa đăng nhập',locked:Boolean(account.locked),code:account.code,password:account.password||null};
+    state.membersList.push(member);
+  }
+  member.name=account.name||member.name;
+  member.role=account.role||member.role||'Member';
+  member.code=account.code;
+  member.locked=Boolean(account.locked);
+  return member;
+}
+
 function completeLoginSession(auth){
+  if(auth?.role==='Member'){
+    const account=findMemberAccount(auth);
+    if(account) auth={...auth,name:account.name,code:account.code,memberId:account.memberId};
+  }
   setSessionAuth(auth);
   switchUserData(state.sessionAuth);
   /* Lưu local ngay, nhưng không render lại toàn trang và không chờ cloud. */
@@ -455,7 +495,7 @@ function handleLoginSubmit(){
     return alert('🚨 Tên thành viên đang bị trùng. Hãy dùng đúng mã thành viên được cấp để xác định tài khoản.');
   }
 
-  const account=state.memberAccounts.find(a=>a.code===code && a.role==='Member');
+  const account=findMemberAccount({role:'Member',code});
   if(!account){
     return alert('❌ Mã thành viên không tồn tại hoặc không còn là mã của tài khoản Thành viên.');
   }
@@ -475,21 +515,24 @@ function handleLoginSubmit(){
   }
 
   if(!account.firstLoginAt){ account.firstLoginAt=new Date().toISOString(); resetProgressForNewMember(); }
-  const member=state.membersList.find(m=>m.id===account.memberId || m.code===code);
+  const member=ensureMemberAccountLink(account);
   if(member){
     member.status='Đang hoạt động';
     member.lastActive='Vừa xong';
     member.currentAction='Học tập';
   }
-  completeLoginSession({name,role:'Member',code,memberId:account.memberId});
+  completeLoginSession({name:account.name||name,role:'Member',code:account.code,memberId:account.memberId});
 }
 
 function handleLogout(){
   const current=state.sessionAuth;
   persistActiveUserData();
   if(current && current.role==='Member'){
-    const a=state.memberAccounts.find(x=>x.code===current.code);
-    if(a){ a.lastLogout=new Date().toISOString(); }
+    const now=new Date().toISOString();
+    const a=findMemberAccount(current);
+    const m=a ? state.membersList.find(x=>String(x.id)===String(a.memberId)) : null;
+    if(a){ a.lastLogout=now; a.lastActive='Đã đăng xuất'; }
+    if(m){ m.status='Đã đăng xuất'; m.currentAction='Đã thoát'; m.lastActive='Đã đăng xuất'; }
   }
   setSessionAuth(null);
   save();
@@ -619,7 +662,7 @@ function renderAdminView(){
   container.hidden=false;
   container.dataset.canViewMembers='true';
   container.dataset.canManageMembers=founderOnly?'true':'false';
-  const accounts = (state.membersList||[]).filter(m=>m.role==='Member'||m.role==='Admin'||m.role==='Founder').map(m=>({m,a:state.memberAccounts.find(x=>x.memberId===m.id)||null}));
+  const accounts = (state.membersList||[]).filter(m=>m.role==='Member'||m.role==='Admin'||m.role==='Founder').map(m=>({m,a:state.memberAccounts.find(x=>String(x.memberId)===String(m.id))||null}));
   container.innerHTML=`<h3 style="color:var(--red);margin-bottom:6px;">👥 QUẢN LÝ THÀNH VIÊN</h3><p class="muted" style="margin:0 0 12px">Admin và Founder đều có thể xem danh sách và thông tin thành viên; thao tác khóa, xóa hoặc thay đổi cấp bậc vẫn chỉ dành cho Người sáng lập.</p>`+
     (accounts.length ? accounts.map(({m,a})=>{
       const code=a?.code || m.code || '—';
@@ -632,7 +675,8 @@ function renderAdminView(){
         <div class="actions">
           <button class="btn sm light" onclick="adminViewMember('${m.id}')">Xem</button>
           ${state.sessionAuth.role==='Founder' && m.role!=='Founder'?`<button class="btn sm ${m.locked?'':'gray'}" onclick="adminToggleLock('${m.id}')">${m.locked?'Mở khóa':'Khóa'}</button>`:''}
-          ${state.sessionAuth.role==='Founder' && m.role==='Admin'?`<button class="btn sm" onclick="adminDemoteToMember('${m.id}')">Hạ cấp</button>`:''}${state.sessionAuth.role==='Founder' && m.role!=='Founder'?`<button class="btn sm danger" onclick="adminDeleteMember('${m.id}')">Xóa</button>`:''}
+          ${state.sessionAuth.role==='Founder' && m.role==='Admin'?`<button class="btn sm" onclick="adminDemoteToMember('${m.id}')">Hạ cấp</button>`:''}          ${state.sessionAuth.role==='Founder' && m.role!=='Founder'?`<button class="btn sm danger" onclick="adminDeleteMember('${m.id}')">Xóa</button>`:''}
+          ${m.role==='Member'&&a?`<button class="btn sm light" onclick="adminResetMemberCode('${m.id}')">🔐 Cấp lại mã</button>`:''}
         </div>
       </div>`;
     }).join('') : '<p class="muted">Chưa có mã thành viên nào. Hãy nhấn “Cấp mã thành viên mới”.</p>');
@@ -677,17 +721,37 @@ function confirmIssueMemberCode(){
     </div>`;
 }
 
+function adminResetMemberCode(id){
+  if(!state.sessionAuth || !['Admin','Founder'].includes(state.sessionAuth.role)) return alert('🔒 Chỉ Admin hoặc Founder mới có quyền cấp lại mã thành viên.');
+  const m=state.membersList.find(x=>String(x.id)===String(id));
+  const a=state.memberAccounts.find(x=>String(x.memberId)===String(id));
+  if(!m || !a) return alert('❌ Không tìm thấy liên kết tài khoản thành viên.');
+  if(m.role!=='Member') return alert('ℹ️ Chỉ có thể cấp lại mã cho tài khoản Thành viên.');
+  const nextCode=randomMemberCode();
+  a.code=nextCode;
+  m.code=nextCode;
+  // Chỉ đổi mã đăng nhập; password, progress, userData và lịch sử được giữ nguyên.
+  save();
+  renderAdminView();
+  showModal('✅ Đã cấp lại mã thành viên', `<div style="text-align:center;padding:10px 0"><div style="font-size:40px">🎟️</div><p><b>Tài khoản:</b> ${esc(a.name||m.name)}</p><p style="font-size:24px;margin:12px 0"><b>${esc(nextCode)}</b></p><p class="muted">Mã cũ đã được thay thế. Mật khẩu, tiến độ, lịch sử và hoạt động của tài khoản vẫn được giữ nguyên.</p><button class="btn" onclick="closeModal()">Đã hiểu</button></div>`);
+}
+
 function adminViewMember(id){
-  const m = state.membersList.find(x => x.id === id);
+  const m = state.membersList.find(x => String(x.id) === String(id));
   if(!m) return;
+  const a=state.memberAccounts.find(x=>String(x.memberId)===String(m.id));
+  const p=a?.progress||{};
   showModal(`👤 Thông tin thành viên: ${m.name}`, `
     <p><b>Tên:</b> ${esc(m.name)}</p>
+    <p><b>memberId liên kết:</b> <code>${esc(a?.memberId||m.id||'—')}</code></p>
     <p><b>Vai trò:</b> ${esc(m.role)}</p>
     <p><b>Trạng thái:</b> ${esc(m.status)}</p>
     <p><b>Hoạt động hiện tại:</b> ${esc(m.currentAction)}</p>
     <p><b>Thời điểm hoạt động gần nhất:</b> ${esc(m.lastActive)}</p>
     <p><b>Tình trạng khóa:</b> ${m.locked?'Đang bị khóa':'Hoạt động'}</p>
-    <p><b>Mã đăng nhập:</b> ${esc(m.code || (state.memberAccounts.find(a=>a.memberId===m.id)?.code || '—'))}</p>
+    <p><b>Mã đăng nhập hiện tại:</b> ${esc(a?.code || m.code || '—')}</p>
+    <p><b>Tiến độ đã lưu:</b> ${Number(p.activities)||0} hoạt động · ${Number(p.studyMinutes)||0} phút học · ${Number(p.xp)||0} XP</p>
+    ${m.role==='Member'&&a?`<button class="btn light" onclick="adminResetMemberCode('${esc(String(m.id))}')">🔐 Cấp lại mã, giữ nguyên dữ liệu</button>`:''}
   `);
 }
 
@@ -1016,7 +1080,7 @@ function getCurrentAccount(){
   if(!state.sessionAuth) return null;
   if(state.sessionAuth.role==='Admin') return {password:state.membersList.find(m=>m.role==='Admin'&&m.name===state.sessionAuth.name)?.password || state.adminPassword};
   if(state.sessionAuth.role==='Founder') return {password:state.membersList.find(m=>m.role==='Founder'&&m.name===state.sessionAuth.name)?.password || state.founderPassword};
-  if(state.sessionAuth.role==='Member') return state.memberAccounts.find(a=>a.code===state.sessionAuth.code) || null;
+  if(state.sessionAuth.role==='Member') return findMemberAccount(state.sessionAuth);
   return null;
 }
 function changeProfilePassword(){
@@ -1268,7 +1332,7 @@ function toggleAchievementGroup(groupId){
 
 function currentMemberAccount(){
   if(!state.sessionAuth || state.sessionAuth.role!=='Member') return null;
-  const a=state.memberAccounts.find(x=>x.code===state.sessionAuth.code);
+  const a=findMemberAccount(state.sessionAuth);
   if(a && !a.progress) a.progress={studyMinutes:0,tasksDone:0,habitsDone:0,overall:0,activities:0,streak:0,xp:0};
   return a;
 }
@@ -1277,7 +1341,7 @@ function getProgressRecord(ownerId=null){
   let id=ownerId;
   if(!id && auth){
     if(auth.role==='Admin') id=state.membersList.find(m=>(m.role==='Admin'||m.role==='Founder')&&m.name===auth.name)?.id||null;
-    else id=state.memberAccounts.find(a=>a.code===auth.code)?.memberId||null;
+    else id=findMemberAccount(auth)?.memberId||null;
   }
   if(!id) return null;
   const member=state.membersList.find(m=>m.id===id);
@@ -1859,7 +1923,7 @@ $('saveGoals').onclick=()=>{state.goals.day=+$('goalDay').value||0;state.goals.w
 
 $('addTodo').onclick=()=>{
     const title=$('todoTitle').value.trim();if(!title)return alert('Bạn nhập nội dung công việc trước nha 🐝🍀');
-    const ownerId=['Admin','Founder'].includes(state.sessionAuth?.role) ? (state.membersList.find(m=>(m.role==='Admin'||m.role==='Founder')&&m.name===state.sessionAuth.name)?.id||null) : (state.memberAccounts.find(a=>a.code===state.sessionAuth?.code)?.memberId||null);
+    const ownerId=accountOwnerId();
     state.todos.push({id:uid(),ownerId,date:$('todoDate').value||todayISO(),title,priority:$('todoPriority').value,time:$('todoTime').value,note:$('todoNote').value,done:false});
     updateAccountProgress('task_created',0,ownerId);
     $('todoTitle').value='';$('todoNote').value='';save()
@@ -2343,7 +2407,7 @@ function ensureHabits(ym){if(!state.habits[ym])state.habits[ym]=[];return state.
 if($('habitMonth')) $('habitMonth').onchange=e=>{currentHabitMonth=e.target.value;renderHabits()};
 if($('prevMonth')) $('prevMonth').onclick=()=>{let [y,m]=currentHabitMonth.split('-').map(Number);m--;if(m<1){m=12;y--}currentHabitMonth=`${y}-${String(m).padStart(2,'0')}`;$('habitMonth').value=currentHabitMonth;renderHabits()};
 if($('nextMonth')) $('nextMonth').onclick=()=>{let [y,m]=currentHabitMonth.split('-').map(Number);m++;if(m>12){m=1;y++}currentHabitMonth=`${y}-${String(m).padStart(2,'0')}`;$('habitMonth').value=currentHabitMonth;renderHabits()};
-if($('addHabit')) $('addHabit').onclick=()=>{const n=$('habitName').value.trim();if(!n)return alert('Nhập tên thói quen nha 🐝🍀');const ownerId=['Admin','Founder'].includes(state.sessionAuth?.role) ? (state.membersList.find(m=>(m.role==='Admin'||m.role==='Founder')&&m.name===state.sessionAuth.name)?.id||null) : (state.memberAccounts.find(a=>a.code===state.sessionAuth?.code)?.memberId||null);
+if($('addHabit')) $('addHabit').onclick=()=>{const n=$('habitName').value.trim();if(!n)return alert('Nhập tên thói quen nha 🐝🍀');const ownerId=accountOwnerId();
     const target=+$('habitTarget').value||20; ensureHabits(currentHabitMonth).push({id:uid(),ownerId,name:n,target,days:{},createdAt:new Date().toISOString()}); updateAccountProgress('habit_created',0,ownerId,target); $('habitName').value=''; checkAchievements(); save()};
 
 if($('reviewHabit')) $('reviewHabit').onclick=()=>{
@@ -3047,7 +3111,7 @@ function executeAutomationCommands(cmdText){
         if(!todoTitle) throw new Error('TODO cần có tên công việc. Cú pháp: TODO|YYYY-MM-DD|Tên công việc|cao/trung/thap|HH:MM|Ghi chú');
         const todoPriority=['cao','trung','thap','thấp'].includes((p[3]||'trung').toLowerCase()) ? ((p[3]||'trung').toLowerCase()==='thấp'?'thap':(p[3]||'trung').toLowerCase()) : 'trung';
         state.todos=Array.isArray(state.todos)?state.todos:[];
-        const ownerId=state.sessionAuth?.role==='Member' ? (state.memberAccounts.find(a=>a.code===state.sessionAuth.code)?.memberId||null) : (state.membersList.find(m=>(m.role==='Admin'||m.role==='Founder')&&m.name===state.sessionAuth?.name)?.id||null);
+        const ownerId=accountOwnerId();
         state.todos.push({id:uid(),ownerId,date:todoDate,title:todoTitle,priority:todoPriority,time:(p[4]||'').trim(),note:(p[5]||'').trim(),done:false}); count++;
         window.__lastCommandTodoDate=todoDate;
       }else if(type==='SCHEDULE' && p[3]){
@@ -3304,10 +3368,9 @@ window.showCommandHelp=function(){
 
 if($('resetAll')){
     $('resetAll').onclick = () => {
-        if(confirm("⚠️ Bạn có chắc chắn muốn XÓA TOÀN BỘ dữ liệu và khôi phục cài đặt gốc?")){
-            localStorage.removeItem(KEY);
-            location.reload();
-        }
+        if(!state.sessionAuth || !['Admin','Founder'].includes(state.sessionAuth.role)) return alert('🔒 Chỉ Admin hoặc Founder mới có quyền cấp lại mã thành viên.');
+        const members=(state.membersList||[]).filter(m=>m.role==='Member' && state.memberAccounts.some(a=>String(a.memberId)===String(m.id)));
+        showModal('🔐 Cấp lại mã thành viên', `<p class="muted">Chỉ mã đăng nhập được thay đổi. Mật khẩu, tiến độ, lịch sử, lịch trình, thói quen và các dữ liệu khác sẽ được giữ nguyên.</p><div style="display:grid;gap:8px">${members.length?members.map(m=>`<div class="card" style="padding:10px;display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap"><span><b>${esc(m.name)}</b><br><small class="muted">${esc(m.code||'Chưa có mã')} · ${esc(m.lastActive||'Chưa đăng nhập')}</small></span><button class="btn sm light" onclick="adminResetMemberCode('${esc(String(m.id))}')">Cấp lại mã</button></div>`).join(''):'<p class="muted">Chưa có tài khoản thành viên để cấp lại mã.</p>'}</div>`);
     };
 }
 
