@@ -662,6 +662,34 @@ function renderAdminMotivations(){
   box.innerHTML=entries.length?entries.map(x=>`<div class="card" style="padding:10px;margin:6px 0"><b>${esc(x.rank)}</b><div>${esc(x.t)}</div><button class="btn danger sm" style="margin-top:6px" onclick="adminDeleteMotivation('${esc(x.rank)}',${x.i})">Xóa</button></div>`).join(''):'<p class="muted">Chưa có lời động viên tùy chỉnh.</p>';
 }
 
+/* 🛡️ FOUNDER PERMISSION MATRIX — CHỈ HIỂN THỊ, KHÔNG TẠO STATE/SCHEMA MỚI */
+const FOUNDER_PERMISSION_GROUPS = [
+  {title:'👥 Thành viên & liên kết tài khoản',items:[
+    ['Xem danh sách hợp nhất','membersList + memberAccounts được nối theo memberId; phục hồi bản ghi hiển thị bị thiếu.'],
+    ['Xem hoạt động và tiến độ','Tên, memberId, trạng thái, hoạt động gần nhất, XP, số hoạt động và phút học đã lưu.'],
+    ['Cấp mã / cấp lại mã','Tạo mã mới hoặc chỉ thay code; mật khẩu, tiến độ, lịch sử và userData được giữ nguyên.'],
+    ['Khóa / mở khóa tài khoản','Founder có thể khóa hoặc mở khóa Member/Admin; không thể khóa Founder.'],
+    ['Nâng cấp / hạ cấp vai trò','Quản lý Member/Admin và bảo vệ nguyên tắc chỉ có một Founder.'],
+    ['Xóa tài khoản','Được phép xóa tài khoản thành viên theo thao tác xác nhận; không thể xóa Founder.']
+  ]},
+  {title:'🏆 Nội dung & cộng đồng',items:[
+    ['Quản lý thành tích và nhiệm vụ','Thêm/xóa nội dung quản trị và nhiệm vụ nhận XP theo các thao tác Admin/Founder hiện có.'],
+    ['Quản lý lời động viên','Thêm/xóa lời động viên theo hạng trong bảng xếp hạng.'],
+    ['Tạo và gán Role tùy chỉnh','Tạo Role, màu sắc, hiệu ứng và gán cho thành viên; chỉ Founder được dùng xưởng Role.']
+  ]},
+  {title:'🔐 Bảo toàn dữ liệu',items:[
+    ['Không đổi schema','Bảng quyền chỉ là giao diện mô tả, không tạo key state hoặc bảng dữ liệu mới.'],
+    ['Không tự động xóa dữ liệu','Các thao tác phá dữ liệu đều yêu cầu hành động riêng và xác nhận; cấp lại mã không xóa dữ liệu.'],
+    ['Theo dõi quyền đang áp dụng','Mọi thao tác nhạy cảm tiếp tục được kiểm tra bằng role Founder trong runtime.']
+  ]}
+];
+function renderFounderPermissionMatrix(){
+  const box=$('founderPermissionMatrix');
+  if(!box) return;
+  if(state.sessionAuth?.role!=='Founder'){box.innerHTML='';return;}
+  box.innerHTML=FOUNDER_PERMISSION_GROUPS.map(group=>`<section class="founder-permission-group"><h4>${esc(group.title)}</h4><div class="founder-permission-list">${group.items.map(([name,detail])=>`<div class="founder-permission-row"><span class="founder-permission-check">✓</span><div><b>${esc(name)}</b><div class="muted">${esc(detail)}</div></div></div>`).join('')}</div></section>`).join('');
+}
+
 /* 👑 ADMIN MEMBER MANAGEMENT */
 function renderAdminView(){
   if(!state.sessionAuth || !['Admin','Founder'].includes(state.sessionAuth.role)) return;
@@ -670,7 +698,10 @@ function renderAdminView(){
   normalizeStateAccounts();
   const repaired=reconcileMemberAccountRecords();
   if(repaired)save({render:false});
-  if(founderOnly) renderCustomRoles();
+  if(founderOnly){
+    renderFounderPermissionMatrix();
+    renderCustomRoles();
+  }
   const container=$('adminMemberListContainer');
   if(!container) return;
   container.hidden=false;

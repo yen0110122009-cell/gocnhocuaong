@@ -157,7 +157,12 @@
       <button class="btn sm" style="margin-top:10px" onclick="adminChangeRoleByCode()">🔐 Áp dụng mã vai trò</button>
       <div class="muted" style="margin-top:8px">🔒 Không thể xóa hoặc hạ cấp Người sáng lập bằng quyền Quản trị viên.</div>
     </div>
-    <div class="card founder-only-admin-card" style="margin-top:16px;background:linear-gradient(135deg,#f3fff7,#f4f0ff);border-color:#78b98b;">
+      <div id="founderPermissionCard" class="card founder-only-admin-card" style="margin-top:16px;background:linear-gradient(135deg,#fffdf0,#f4f8ff);border-color:#b98b35;">
+        <h3>🛡️ Quyền hạn chi tiết của Founder</h3>
+        <p class="muted">Founder là quyền cao nhất của hệ thống. Bảng này chỉ mô tả các quyền đang được cấp, không lưu thêm dữ liệu quyền và không thể tự khóa quyền gốc của Founder.</p>
+        <div id="founderPermissionMatrix" aria-live="polite"></div>
+      </div>
+      <div class="card founder-only-admin-card" style="margin-top:16px;background:linear-gradient(135deg,#f3fff7,#f4f0ff);border-color:#78b98b;">
       <h3>🎨 Xưởng tạo Role — CHỈ NGƯỜI SÁNG LẬP</h3>
       <p class="muted">Tạo bao nhiêu role tùy thích, đặt tên + biểu tượng + màu. Có thể dùng 1 màu hoặc chuyển màu, rồi gán role đó cho từng thành viên.</p>
       <button class="btn sm" onclick="founderCreateRole()">✨ Tạo role mới</button>
