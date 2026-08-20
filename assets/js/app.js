@@ -2402,8 +2402,48 @@ function toggleHabit(id,day){
     persistActiveUserData();
     save({render:false});
 }
+function renderHabitQuickSummary(){
+    const summary=$('habitQuickSummary'),list=$('habitQuickList');
+    if(!summary||!list)return;
+    const ym=currentHabitMonth,days=daysInMonth(ym),habits=ensureHabits(ym);
+    if(!habits.length){
+        summary.innerHTML='<div class="empty">Chưa có thói quen để tổng hợp.</div>';
+        list.innerHTML='';
+        $('habitQuickSubtitle').textContent=`Tháng ${ym} • Hãy thêm thói quen đầu tiên.`;
+        $('habitQuickSync').textContent='Không có dữ liệu mới';
+        return;
+    }
+    const today=todayISO(),isCurrentMonth=ym===today.slice(0,7),todayDay=isCurrentMonth?Number(today.slice(-2)):null;
+    const rows=habits.map(h=>{
+        const done=Object.values(h.days||{}).filter(Boolean).length;
+        const target=Math.max(1,Number(h.target)||days);
+        const pct=Math.min(100,Math.round(done/target*100));
+        const lastDay=isCurrentMonth?todayDay:days;
+        let streak=0;
+        for(let cursor=lastDay;cursor>=1&&Boolean(h.days?.[cursor]);cursor--)streak++;
+        return {h,done,target,pct,streak,todayDone:todayDay?Boolean(h.days?.[todayDay]):false};
+    }).sort((a,b)=>b.pct-a.pct||b.streak-a.streak||String(a.h.name||'').localeCompare(String(b.h.name||''),'vi'));
+    const doneToday=rows.filter(x=>x.todayDone).length;
+    const totalDone=rows.reduce((sum,x)=>sum+x.done,0);
+    const totalTarget=rows.reduce((sum,x)=>sum+x.target,0);
+    const average=Math.round(rows.reduce((sum,x)=>sum+x.pct,0)/rows.length);
+    const bestStreak=Math.max(...rows.map(x=>x.streak));
+    const statBox=(value,label,progress=null)=>`<div class="habit-quick-stat"><strong>${esc(value)}</strong><span>${esc(label)}</span>${progress===null?'':`<div class="progress" aria-label="${esc(label)}"><i style="width:${progress}%"></i></div>`}</div>`;
+    summary.innerHTML=[
+        statBox(`${doneToday}/${rows.length}`,'Hôm nay hoàn thành',Math.round(doneToday/rows.length*100)),
+        statBox(`${totalDone}/${totalTarget}`,'Lượt / mục tiêu tháng',Math.min(100,Math.round(totalDone/totalTarget*100))),
+        statBox(`${average}%`,'Tiến độ trung bình',average),
+        statBox(`${bestStreak} ngày`,'Chuỗi hiện tại tốt nhất')
+    ].join('');
+    $('habitQuickSubtitle').textContent=`Tháng ${ym} • ${rows.length} thói quen • xếp theo tiến độ.`;
+    $('habitQuickSync').textContent='Chỉ đọc state hiện tại';
+    const habitRows=rows.slice(0,6).map(x=>`<div class="habit-quick-row"><span class="habit-quick-row-marker">${x.todayDone?'✓':'🍀'}</span><div class="habit-quick-row-main"><div class="habit-quick-row-title">${esc(x.h.name||'Thói quen chưa đặt tên')}</div><div class="habit-quick-row-meta">${x.done}/${x.target} lượt mục tiêu • Chuỗi ${x.streak} ngày</div></div><div class="progress" aria-label="${esc(x.h.name||'Tiến độ')}"><i style="width:${x.pct}%"></i></div></div>`).join('');
+    list.innerHTML=habitRows+(rows.length>6?`<div class="habit-quick-more">Còn ${rows.length-6} thói quen trong bảng chi tiết bên dưới.</div>`:'');
+}
+
 function renderHabits(){
     const ym=currentHabitMonth,days=daysInMonth(ym),a=ensureHabits(ym);
+    renderHabitQuickSummary();
     $('habitGrid').innerHTML=`<div class="habitrow" style="background:var(--pink);font-weight:700"><div class="name">Thói quen</div>${Array.from({length:days},(_,i)=>`<div>${i+1}</div>`).join('')}<div>%</div></div>`+a.map(h=>{const done=Array.from({length:days},(_,i)=>h.days[i+1]).filter(Boolean).length,p=Math.round(done/days*100);return `<div class="habitrow"><div class="name"><b>${esc(h.name)}</b><br><span class="muted">Mục tiêu ${h.target} ngày • ${done}/${days}</span></div>${Array.from({length:days},(_,i)=>`<div><div class="check ${h.days[i+1]?'on':''}" onclick="toggleHabit('${h.id}',${i+1})">${h.days[i+1]?'✓':''}</div></div>`).join('')}<div><b>${p}%</b><br><button class="btn light sm" onclick="editHabit('${h.id}')">Sửa</button><button class="btn danger sm" onclick="deleteHabit('${h.id}')">Xóa</button></div></div>`}).join('')||'<div class="empty">Tháng này chưa có thói quen.</div>';
     const stats=a.map(h=>{const done=Object.values(h.days).filter(Boolean).length;return {h,done,p:Math.round(done/days*100)}});
     $('habitMonthStats').innerHTML=stats.map(s=>`<div style="margin:9px 0"><b>${esc(s.h.name)}</b><span style="float:right">${s.p}%</span><div class="progress"><i style="width:${s.p}%"></i></div><small>${s.done} ngày / mục tiêu ${s.h.target} ngày</small></div>`).join('')||'Chưa có dữ liệu.';
