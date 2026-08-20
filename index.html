@@ -4435,33 +4435,7 @@ function renderCurrentTab(){
 }
 function renderAll(){renderCurrentTab();}
 
-window.onload = async () => {
-    /* ☁️ Lấy dữ liệu cloud trước khi render giao diện. */
-    const cloudLoaded = await pullStateFromServer();
-    if(!cloudLoaded){
-      /*
-        Nếu dòng global_state chưa tồn tại, tạo nó.
-        Nếu đã tồn tại nhưng payload lỗi/rỗng, vẫn giữ dữ liệu local.
-      */
-      const checkUrl=SUPABASE_REST+'/'+SUPABASE_TABLE+
-        '?id=eq.'+encodeURIComponent(SUPABASE_STATE_ID)+'&select=id';
-
-      try{
-        const checkRes=await fetch(checkUrl,{
-          method:'GET',
-          headers:supabaseHeaders(),
-          cache:'no-store'
-        });
-        const checkRows=checkRes.ok?await checkRes.json():[];
-        if(Array.isArray(checkRows)&&checkRows.length===0){
-          await createInitialSupabaseState();
-        }
-      }catch(e){
-        console.warn('☁️ Không kiểm tra được global_state.',e);
-      }
-    }
-
-    normalizeStateAccounts();
+function hydrateStartupInputs(){
     if($('todoDate')) $('todoDate').value = todayISO();
     if($('schDate')) $('schDate').value = todayISO();
     if($('mDate')) $('mDate').value = todayISO();
@@ -4472,7 +4446,8 @@ window.onload = async () => {
     if($('pomoFocusInput')) $('pomoFocusInput').value = state.pomo.focus || 25;
     if($('pomoShortInput')) $('pomoShortInput').value = state.pomo.short || 5;
     if($('pomoLongInput')) $('pomoLongInput').value = state.pomo.long || 15;
-    
+}
+function activateStartupView(){
     const hash=(location.hash||'').replace('#','');
     if(hash && $(hash)){
       currentNavId=hash;
@@ -4483,8 +4458,45 @@ window.onload = async () => {
       currentNavId='home';
       menuCompact=false;
     }
+}
+async function finishCloudStartup(){
+    const cloudLoaded = await pullStateFromServer();
+    if(!cloudLoaded){
+      /* Nếu cloud chưa có dòng dữ liệu, tạo nó; dữ liệu local vẫn được dùng trước. */
+      const checkUrl=SUPABASE_REST+'/'+SUPABASE_TABLE+
+        '?id=eq.'+encodeURIComponent(SUPABASE_STATE_ID)+'&select=id';
+      try{
+        const checkRes=await fetch(checkUrl,{
+          method:'GET',
+          headers:supabaseHeaders(),
+          cache:'no-store'
+        });
+        const checkRows=checkRes.ok?await checkRes.json():[];
+        if(Array.isArray(checkRows)&&checkRows.length===0) await createInitialSupabaseState();
+      }catch(e){
+        console.warn('☁️ Không kiểm tra được global_state.',e);
+      }
+    }
+    return cloudLoaded;
+}
+window.onload = async () => {
+    /* P0: hiển thị state local trước để không chặn first paint bởi mạng. */
+    normalizeStateAccounts();
+    hydrateStartupInputs();
+    activateStartupView();
     renderAll();
     updateMenu();
+
+    /* Đồng bộ cloud ở nền; nếu có dữ liệu mới thì merge và vẽ lại đúng tab hiện tại. */
+    let cloudLoaded=false;
+    try{cloudLoaded=await finishCloudStartup();}
+    catch(e){console.warn('☁️ Đồng bộ nền thất bại, tiếp tục dùng dữ liệu local.',e);}
+    if(cloudLoaded){
+      normalizeStateAccounts();
+      hydrateStartupInputs();
+      renderAll();
+      updateMenu();
+    }
 };
 </script>
 
@@ -5277,9 +5289,7 @@ if(typeof old==='function'){
 
 </body>
 </html>
-<script>document.addEventListener('DOMContentLoaded',finalRefreshLevelPanels);</script>
-
-<script>try{finalRefreshLevelPanels();}catch(e){}</script>
+<!-- P1: finalRefreshLevelPanels được gọi bởi các renderer cần thiết, không chạy thêm ở startup. -->
 
 <script>
 /* =========================================================
@@ -6848,8 +6858,7 @@ html body #adminMemberListContainer .member-role-stack{
   `;
   document.head.appendChild(st);
   window.studyEmpireRefreshRoleEffectsDisplay=enhanceAchievementCards;
-  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',enhanceAchievementCards,{once:true});
-  else enhanceAchievementCards();
+  /* P1: chỉ enhance khi renderAchievementsView được gọi lúc mở tab Thành tích. */
 })();
 </script>
 
@@ -6996,8 +7005,7 @@ html body #adminMemberListContainer .member-role-stack{
   `;
   document.head.appendChild(st);
   window.studyEmpireRefreshRoleEffectsConcreteV4=refresh4;
-  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>setTimeout(refresh4,0),{once:true});
-  else setTimeout(refresh4,0);
+  /* P1: refresh4 chỉ chạy sau khi Thành tích hoặc Quản trị được render. */
 })();
 </script>
 
@@ -7125,7 +7133,7 @@ html body #adminMemberListContainer .member-role-stack{
     window.renderAchievementsView=wrapped;
     try{globalThis.renderAchievementsView=wrapped}catch(e){}
   }
-  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',normalizeAchievementRole20,{once:true});else setTimeout(normalizeAchievementRole20,0);
+  /* P1: normalizeAchievementRole20 chỉ chạy sau khi mở Thành tích. */
 })();
 </script>
 
@@ -7201,7 +7209,7 @@ html body #adminMemberListContainer .member-role-stack{
   const originalSummary=window.renderSummary;
   if(typeof originalSummary==='function')window.renderSummary=function(){const r=originalSummary.apply(this,arguments);renderV23();return r;};
   const boot=()=>{try{renderV23();}catch(e){console.warn('Summary chart V23',e);}};
-  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot,{once:true});else setTimeout(boot,0);
+  /* P1: biểu đồ chỉ được tạo qua wrapper renderSummary khi mở tab Tổng kết. */
 })();
 </script>
 
