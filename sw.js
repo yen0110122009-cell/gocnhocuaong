@@ -1,4 +1,4 @@
-const STATIC_CACHE = 'gocnhocuaong-static-v4';
+const STATIC_CACHE = 'gocnhocuaong-static-v5';
 const STATIC_ASSETS = [
   './assets/css/app.css',
   './assets/js/app.js'
@@ -42,11 +42,20 @@ self.addEventListener('fetch', event => {
   event.respondWith(
     caches.open(STATIC_CACHE).then(async cache => {
       const cached = await cache.match(request);
-      const network = fetch(request).then(response => {
-        if (response && response.ok) cache.put(request, response.clone());
-        return response;
-      }).catch(() => cached);
-      return cached || network;
+      const isAppScript = url.pathname.endsWith('/assets/js/app.js');
+      if (isAppScript) {
+        try {
+          const response = await fetch(request, {cache:'no-store'});
+          if (response && response.ok) await cache.put(request, response.clone());
+          return response;
+        } catch (error) {
+          return cached || fetch(request);
+        }
+      }
+      if (cached) return cached;
+      const response = await fetch(request);
+      if (response && response.ok) await cache.put(request, response.clone());
+      return response;
     })
   );
 });
