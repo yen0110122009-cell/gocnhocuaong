@@ -884,3 +884,21 @@ html,body{overflow-x:hidden}
 .founder-permission-row b{font-size:13px}
 .founder-permission-row .muted{margin-top:2px;font-size:12px;line-height:1.45}
 @media (max-width:600px){.founder-permission-group{padding:9px}.founder-permission-row{padding:7px}.founder-permission-row .muted{font-size:11px}}
+
+/* CRUD + temporal history UI V24 */
+.history-time-year,.history-time-month,.history-time-day,.schedule-time-group{margin:0 0 10px;border:1px solid var(--line);border-radius:14px;background:rgba(255,255,255,.38);overflow:hidden}
+.history-time-year>summary,.history-time-month>summary,.history-time-day>summary,.schedule-time-group>summary{cursor:pointer;list-style:none;padding:12px 14px;font-weight:900;display:flex;align-items:center;justify-content:space-between;gap:10px;color:var(--ink)}
+.history-time-year>summary::-webkit-details-marker,.history-time-month>summary::-webkit-details-marker,.history-time-day>summary::-webkit-details-marker,.schedule-time-group>summary::-webkit-details-marker{display:none}
+.history-time-year>summary::before,.history-time-month>summary::before,.history-time-day>summary::before,.schedule-time-group>summary::before{content:'＋';font-size:18px;color:var(--red)}
+.history-time-year[open]>summary::before,.history-time-month[open]>summary::before,.history-time-day[open]>summary::before,.schedule-time-group[open]>summary::before{content:'−'}
+.history-time-year-body,.history-time-month-body,.history-time-day-body{padding:0 10px 10px}
+.history-time-month,.history-time-day{background:rgba(255,255,255,.52)}
+.history-time-day{background:var(--card)}
+.history-time-day-body{padding:8px}
+.history-time-day-body .history-v21-item{margin-bottom:8px}
+.schedule-group-items{padding:8px 10px 10px}
+.schedule-group-items>.schedule-item{margin-bottom:8px}
+.schedule-group-items>.schedule-item:last-child{margin-bottom:0}
+.journey-entry .actions{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.history-v21-actions{display:flex;flex-wrap:wrap;gap:7px}
+@media (max-width:640px){.history-time-year>summary,.history-time-month>summary,.history-time-day>summary,.schedule-time-group>summary{padding:10px;font-size:13px}.history-time-year-body,.history-time-month-body{padding:0 6px 6px}.history-time-day-body{padding:5px}.journey-entry .actions .btn{flex:1 1 auto}}
