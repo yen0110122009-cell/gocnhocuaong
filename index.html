@@ -372,7 +372,24 @@ body[data-role="Guest"] .guest-disabled{opacity:.58;cursor:not-allowed}
 .level-panel-final .lv-next{font-size:12px;opacity:.72;margin-top:7px}
 </style>
 
-<style>.command-help{white-space:pre-wrap;padding:10px;border-radius:10px;background:#f8fafc;border:1px solid var(--line);font-size:12px;line-height:1.55}</style></head>
+<style>.command-help{white-space:pre-wrap;padding:10px;border-radius:10px;background:#f8fafc;border:1px solid var(--line);font-size:12px;line-height:1.55}</style><style id="perf-safe-ui-v25">
+/* Hiệu ứng nhẹ hơn trên điện thoại/máy yếu; không thay đổi màu nền hay dữ liệu Role. */
+@media (max-width: 760px), (prefers-reduced-motion: reduce){
+  .se-shared-role-capsule,.se-shared-role-backdrop,.se-shared-role-icon,.se-shared-role-orbit-a,.se-shared-role-orbit-b,.se-shared-role-orbit-c,.se-battleground-active,
+  #adminMemberListContainer .role-premium-vo-cuc .role-corner-placed,#adminMemberListContainer .role-premium-than-thoai .role-corner-placed,
+  .achievement-inline-role-capsule .role-capsule,.achievement-inline-role-capsule .role-corner-placed,.achievement-inline-role-capsule .role-capsule-content{animation:none!important;animation-play-state:paused!important}
+  .se-shared-role-capsule,.se-battleground-active{background-size:100% 100%!important;filter:none!important}
+  .se-shared-role-backdrop{display:none!important}
+  .se-shared-role-capsule{box-shadow:0 3px 10px rgba(31,41,55,.16)!important}
+}
+@media (max-width: 760px){
+  .role-capsule,.se-shared-role-capsule{box-shadow:0 3px 10px rgba(31,41,55,.14)!important}
+  .history-v21-item{box-shadow:none!important;transition:none!important}
+  .history-v21-item:hover{transform:none!important;box-shadow:none!important}
+}
+.perf-pager{display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap;margin:12px 0 2px;padding-top:10px;border-top:1px solid var(--line)}
+.perf-pager .btn{min-width:38px}.perf-pager-label{font-size:12px;color:var(--muted);font-weight:700}
+</style></head>
 <body class="theme-vui">
 
 <!-- 🔐 MÀN HÌNH XÁC THỰC -->
@@ -4351,36 +4368,72 @@ function updateFounderStudyVisibility(){
   const recent=document.querySelectorAll('#studySessions'); recent.forEach(el=>{ const card=el.closest('.card'); if(card) card.style.display=''; });
 }
 
-function renderAll(){
-  try{renderPrivateXPHistoryAdmin();}catch(e){}
-
-    if(state.sessionAuth && state.sessionAuth.role!=='Guest'){ ensureUserStore(); const id=accountOwnerId(); if(id && state.userData.accounts[id]){ /* active bucket is already loaded */ } }
-    // Kiểm tra lại thành tích khi mở/đổi module để dữ liệu đã làm trước đó cũng được tính.
-    checkAchievements();
-    checkAuthSession();
-    updateFounderStudyVisibility();
-    renderProfileView();
-    renderAdminView();
-    renderAdminMotivations();
-    renderHome();
-    renderTodos();
-    renderHabits();
-    renderMoods();
-    renderPomoClock();
-    renderStudySessions();
-    renderFounderSubjectStats();
-    renderAchievementsView();
-    renderQuestBoard();
-    renderTrash();
-    renderSchedule();
-    renderMoments();
-    renderTimelineSummary();
-    renderJournals();
-    renderEndDay();
-    renderSummary();
-    renderComparison();
-    renderSheetLinks();
+const PERF_PAGE_SIZE=12;
+const perfPageState=Object.create(null);
+function perfPageKey(key){return String(key||'list').replace(/[^a-z0-9_-]/gi,'_');}
+function setPerfPage(key,page){perfPageState[perfPageKey(key)]=Math.max(0,Number(page)||0);applyPerfPagination();}
+window.setPerfPage=setPerfPage;
+function perfPagerFor(container,key){
+  const safe=perfPageKey(key),parent=container?.parentElement;
+  return parent?.querySelector(`[data-perf-pager="${safe}"]`)||null;
 }
+function paginatePerfContainer(container,itemSelector,key,size=PERF_PAGE_SIZE,label='mục'){
+  if(!container)return;
+  const safe=perfPageKey(key),items=Array.from(container.querySelectorAll(itemSelector)),total=items.length,pages=Math.max(1,Math.ceil(total/size));
+  if(pages<=1){items.forEach(item=>{item.hidden=false;});perfPagerFor(container,safe)?.remove();delete perfPageState[safe];return;}
+  const page=Math.min(Math.max(0,Number(perfPageState[safe])||0),pages-1);perfPageState[safe]=page;
+  const start=page*size;items.forEach((item,index)=>{item.hidden=index<start||index>=start+size;});
+  let pager=perfPagerFor(container,safe);
+  if(!pager){pager=document.createElement('div');pager.className='perf-pager';pager.dataset.perfPager=safe;container.insertAdjacentElement('afterend',pager);}
+  pager.innerHTML=`<button type="button" class="btn light sm" ${page<=0?'disabled':''} onclick="setPerfPage('${safe}',${page-1})">‹ Trước</button><span class="perf-pager-label">${page+1}/${pages} · ${total} ${label}</span><button type="button" class="btn light sm" ${page>=pages-1?'disabled':''} onclick="setPerfPage('${safe}',${page+1})">Sau ›</button>`;
+}
+function applyPerfPagination(){
+  const targets=[
+    ['adminMemberListContainer',':scope > .card','members',12,'thành viên'],
+    ['todoList',':scope > .todo','todos',12,'công việc'],
+    ['scheduleList',':scope > .todo','schedules',12,'lịch'],
+    ['summaryAchievementList',':scope > .achievement','summary-achievements',18,'thành tích'],
+    ['studyAiFlashcardList',':scope > .study-ai-card','study-ai-flashcards',10,'flashcard'],
+    ['studyAiExamList',':scope > .study-ai-card','study-ai-exams',10,'đề thi'],
+    ['studyAiInboxList',':scope > .study-ai-card','study-ai-inbox',10,'góp ý'],
+    ['trashList',':scope > .card','trash',12,'mục lưu trữ']
+  ];
+  targets.forEach(([id,selector,key,size,label])=>paginatePerfContainer($(id),selector,key,size,label));
+  [['#momentsList .history-v21-list','moments-history','khoảnh khắc'],['#journalList .history-v21-list','journal-history','nhật ký'],['#moodHistory .history-v21-list','mood-history','cảm xúc'],['#endDayHistory .history-v21-list','endday-history','kết ngày']].forEach(([selector,key,label])=>paginatePerfContainer(document.querySelector(selector),':scope > .history-v21-item',key,10,label));
+  document.querySelectorAll('#rebuiltAchievementGroups .achievement-group > div').forEach((group,index)=>paginatePerfContainer(group,':scope > .achievement',`achievement-group-${index}`,12,'thành tích'));
+}
+function renderCurrentTab(){
+  if(state.sessionAuth && state.sessionAuth.role!=='Guest'){ensureUserStore();const id=accountOwnerId();if(id&&state.userData.accounts[id]){/* active bucket is already loaded */}}
+  checkAchievements();
+  checkAuthSession();
+  updateFounderStudyVisibility();
+  try{renderPrivateXPHistoryAdmin();}catch(e){}
+  try{renderProfileView();}catch(e){}
+  const tab=(typeof currentNavId!=='undefined'&&currentNavId)||String(location.hash||'').replace(/^#/,'')||'home';
+  switch(tab){
+    case 'home':renderHome();break;
+    case 'admin':renderAdminView();renderAdminMotivations();break;
+    case 'profile':renderProfileView();break;
+    case 'endday':renderEndDay();break;
+    case 'todo':renderTodos();break;
+    case 'study':renderPomoClock();renderStudySessions();renderFounderSubjectStats();break;
+    case 'achievements':renderAchievementsView();renderQuestBoard();break;
+    case 'habit':renderHabits();break;
+    case 'mood':renderMoods();break;
+    case 'schedule':renderSchedule();break;
+    case 'moments':renderMoments();break;
+    case 'journal':renderJournals();break;
+    case 'summary':renderSummary();renderTimelineSummary();break;
+    case 'compare':renderComparison();break;
+    case 'data':renderSheetLinks();break;
+    case 'trash':renderTrash();break;
+    case 'studyAi-flashcards':if(typeof renderFlashcards==='function')renderFlashcards(data.flashcards?.at(-1)?.items||[]);break;
+    case 'studyAi-contribution':if(typeof renderRewards==='function')renderRewards();if(typeof renderInbox==='function')renderInbox();break;
+    default:renderHome();break;
+  }
+  applyPerfPagination();
+}
+function renderAll(){renderCurrentTab();}
 
 window.onload = async () => {
     /* ☁️ Lấy dữ liệu cloud trước khi render giao diện. */
