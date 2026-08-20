@@ -829,3 +829,18 @@ html,body{overflow-x:hidden}
 @media (prefers-reduced-motion:reduce){.habit-quick-card *{scroll-behavior:auto}}
 .habit-quick-row-marker{flex:0 0 auto;width:27px;height:27px;display:grid;place-items:center;border-radius:9px;background:var(--pink);font-size:14px}
 .habit-quick-more{grid-column:1/-1;font-size:11px;color:var(--muted);font-style:italic}
+
+/* ===== HABIT REMINDERS ===== */
+.habit-reminder-panel{margin-top:16px;padding-top:14px;border-top:1px dashed var(--theme-line,var(--line))}
+.habit-reminder-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:10px}
+.habit-reminder-head h4{margin:0 0 3px;color:var(--purple,#6b35a8)}
+.habit-reminder-head p{margin:0;font-size:.9rem}
+.habit-reminder-list{display:grid;gap:8px}
+.habit-reminder-row{display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid color-mix(in srgb,var(--pink) 54%,var(--line));border-radius:12px;background:var(--card-bg,rgba(255,255,255,.58))}
+.habit-reminder-icon{flex:0 0 28px;width:28px;height:28px;display:grid;place-items:center;border-radius:50%;background:var(--pink);font-size:.9rem}
+.habit-reminder-row>div{min-width:0;flex:1}
+.habit-reminder-row b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.habit-reminder-row small{display:block;margin-top:2px;color:var(--muted);font-size:.78rem}
+.habit-reminder-row .tag{flex:0 0 auto;color:var(--purple,#6b35a8)}
+.habit-reminder-empty,.habit-reminder-more{padding:9px 11px;color:var(--muted);font-size:.88rem}
+@media (max-width:560px){.habit-reminder-head{display:block}.habit-reminder-head .btn{margin-top:8px}.habit-reminder-row{align-items:flex-start}.habit-reminder-row .tag{margin-left:auto}}
