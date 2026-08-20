@@ -1,4 +1,4 @@
-const STATIC_CACHE = 'gocnhocuaong-static-v3';
+const STATIC_CACHE = 'gocnhocuaong-static-v4';
 const STATIC_ASSETS = [
   './assets/css/app.css',
   './assets/js/app.js'
@@ -6,9 +6,15 @@ const STATIC_ASSETS = [
 
 self.addEventListener('install', event => {
   event.waitUntil(
-    caches.open(STATIC_CACHE)
-      .then(cache => cache.addAll(STATIC_ASSETS))
-      .then(() => self.skipWaiting())
+    caches.open(STATIC_CACHE).then(async cache => {
+      await Promise.all(STATIC_ASSETS.map(async asset => {
+        const url = new URL(asset, self.registration.scope);
+        url.searchParams.set('sw-refresh', STATIC_CACHE);
+        const response = await fetch(url.toString(), { cache: 'reload' });
+        if (!response.ok) throw new Error(`Không thể tải asset: ${asset}`);
+        await cache.put(new Request(new URL(asset, self.registration.scope).toString()), response);
+      }));
+    }).then(() => self.skipWaiting())
   );
 });
 
