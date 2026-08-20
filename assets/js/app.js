@@ -2357,6 +2357,7 @@ if($('reviewHabit')) $('reviewHabit').onclick=()=>{
     alert(gained?`🍀 Tháng ${ym}: +${gained} XP từ ${gained} thói quen hoàn thành.`:'🍀 Chưa có XP mới cho tháng này.');
     renderHabits();
 };
+if($('habitReminderFocus')) $('habitReminderFocus').onclick=()=>{$('habitGrid')?.scrollIntoView({behavior:'smooth',block:'start'});};
 function awardDailyHabitMilestone(ownerId, monthKey, day){
     if(!ownerId || !monthKey || !day) return 0;
     const habits = ensureHabits(monthKey).filter(h=>String(h.ownerId)===String(ownerId));
@@ -2409,6 +2410,9 @@ function renderHabitQuickSummary(){
     if(!habits.length){
         summary.innerHTML='<div class="empty">Chưa có thói quen để tổng hợp.</div>';
         list.innerHTML='';
+        const emptyReminder=$('habitReminderList');
+        if(emptyReminder) emptyReminder.innerHTML='<div class="habit-reminder-empty">Thêm thói quen đầu tiên để nhận nhắc nhẹ mỗi ngày.</div>';
+        if($('habitReminderSubtitle')) $('habitReminderSubtitle').textContent='Chưa có thói quen để nhắc.';
         $('habitQuickSubtitle').textContent=`Tháng ${ym} • Hãy thêm thói quen đầu tiên.`;
         $('habitQuickSync').textContent='Không có dữ liệu mới';
         return;
@@ -2439,6 +2443,17 @@ function renderHabitQuickSummary(){
     $('habitQuickSync').textContent='Chỉ đọc state hiện tại';
     const habitRows=rows.slice(0,6).map(x=>`<div class="habit-quick-row"><span class="habit-quick-row-marker">${x.todayDone?'✓':'🍀'}</span><div class="habit-quick-row-main"><div class="habit-quick-row-title">${esc(x.h.name||'Thói quen chưa đặt tên')}</div><div class="habit-quick-row-meta">${x.done}/${x.target} lượt mục tiêu • Chuỗi ${x.streak} ngày</div></div><div class="progress" aria-label="${esc(x.h.name||'Tiến độ')}"><i style="width:${x.pct}%"></i></div></div>`).join('');
     list.innerHTML=habitRows+(rows.length>6?`<div class="habit-quick-more">Còn ${rows.length-6} thói quen trong bảng chi tiết bên dưới.</div>`:'');
+    const reminderList=$('habitReminderList'),reminderSubtitle=$('habitReminderSubtitle');
+    if(reminderList&&reminderSubtitle){
+        if(!isCurrentMonth){
+            reminderSubtitle.textContent='Nhắc nhở chỉ áp dụng cho tháng hiện tại.';
+            reminderList.innerHTML='<div class="habit-reminder-empty">Hãy chuyển về tháng hiện tại để xem nhắc nhở hôm nay.</div>';
+        }else{
+            const reminders=rows.filter(x=>!x.todayDone).sort((a,b)=>a.pct-b.pct||String(a.h.name||'').localeCompare(String(b.h.name||''),'vi'));
+            reminderSubtitle.textContent=reminders.length?`Còn ${reminders.length} thói quen chưa ghi nhận hôm nay.`:'Tuyệt vời — bạn đã hoàn thành tất cả thói quen hôm nay.';
+            reminderList.innerHTML=reminders.length?reminders.slice(0,5).map(x=>`<div class="habit-reminder-row"><span class="habit-reminder-icon">🔔</span><div><b>${esc(x.h.name||'Thói quen chưa đặt tên')}</b><small>${x.done}/${x.target} lượt tháng • Chuỗi ${x.streak} ngày</small></div><span class="tag">Chưa xong</span></div>`).join('')+(reminders.length>5?`<div class="habit-reminder-more">Còn ${reminders.length-5} nhắc nhở trong bảng chi tiết.</div>`:''):'<div class="habit-reminder-empty">Mọi thói quen hôm nay đã được ghi nhận. Giữ nhịp nhé!</div>';
+        }
+    }
 }
 
 function renderHabits(){
