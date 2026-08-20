@@ -2481,19 +2481,110 @@ if($('addSchedule')){
     };
 }
 
+let scheduleSelectMode=false;
+const selectedScheduleIds=new Set();
+let scheduleLongPressTimer=0;
+function scheduleIdFromNode(node){return String(node?.dataset?.scheduleId||'');}
+function updateScheduleBulkUi(){
+    const bar=$('scheduleBulkBar'),hint=$('scheduleLongPressHint'),all=$('scheduleSelectAll'),count=$('scheduleSelectedCount'),remove=$('scheduleDeleteSelected');
+    if(!bar)return;
+    const existing=new Set((state.schedules||[]).map(x=>String(x.id)));
+    selectedScheduleIds.forEach(id=>{if(!existing.has(id))selectedScheduleIds.delete(id);});
+    const selected=selectedScheduleIds.size,total=existing.size;
+    bar.hidden=!scheduleSelectMode;
+    if(hint)hint.hidden=scheduleSelectMode||!total;
+    if(count)count.textContent=`${selected} lịch đã chọn`;
+    if(remove){remove.disabled=!selected;remove.textContent=selected?`🗑️ Xóa ${selected} lịch đã chọn`:'🗑️ Xóa đã chọn';}
+    if(all){all.checked=total>0&&selected===total;all.indeterminate=selected>0&&selected<total;}
+}
+function setScheduleSelectMode(enabled){
+    scheduleSelectMode=Boolean(enabled);
+    if(!scheduleSelectMode)selectedScheduleIds.clear();
+    renderSchedule();
+}
+window.setScheduleSelectMode=setScheduleSelectMode;
+function toggleScheduleSelection(id,checked){
+    const key=String(id);
+    if(checked)selectedScheduleIds.add(key);else selectedScheduleIds.delete(key);
+    updateScheduleBulkUi();
+    document.querySelectorAll('#scheduleList .schedule-item').forEach(item=>{
+      const active=selectedScheduleIds.has(scheduleIdFromNode(item));
+      item.classList.toggle('is-selected',active);
+      const box=item.querySelector('.schedule-item-select');if(box)box.checked=active;
+    });
+}
+function deleteSelectedSchedules(){
+    const ids=new Set([...selectedScheduleIds]);
+    const items=(state.schedules||[]).filter(item=>ids.has(String(item.id)));
+    if(!items.length)return;
+    if(!confirm(`Xóa ${items.length} lịch trình đã chọn? Các mục sẽ được chuyển vào Thùng rác.`))return;
+    const owners=new Map(),trashItems=[];
+    items.forEach(item=>{
+      const owner=item?.ownerId||accountOwnerId()||null;
+      if(owner&&!owners.has(owner))owners.set(owner,{before:Number(calculateBaseXP(owner)?.baseXP||0),items:[]});
+      const trashItem=moveTrash('schedules',item);
+      if(trashItem){trashItems.push({trashItem,owner});if(owner)owners.get(owner).items.push(trashItem);}
+    });
+    state.schedules=(state.schedules||[]).filter(item=>!ids.has(String(item.id)));
+    owners.forEach((entry,owner)=>{
+      const after=Number(calculateBaseXP(owner)?.baseXP||entry.before),reversal=Math.min(0,after-entry.before);
+      entry.items.forEach(trashItem=>{trashItem._xpReversal=reversal;trashItem._xpReversalDetail=reversal<0?`Trừ ${Math.abs(reversal)} XP vì đã xóa schedules: ${trashItem.title||'lịch đã xóa'}`:'';});
+      recalculateCurrentProgress(owner,{persist:false});
+    });
+    trashItems.filter(({owner})=>!owner).forEach(({trashItem})=>{trashItem._xpReversal=0;trashItem._xpReversalDetail='';});
+    selectedScheduleIds.clear();
+    scheduleSelectMode=false;
+    save();
+    renderTrash();
+    renderSchedule();
+}
+function bindScheduleBulkControls(){
+    const all=$('scheduleSelectAll'),remove=$('scheduleDeleteSelected'),exit=$('scheduleExitSelect');
+    if(all)all.onchange=()=>{const checked=all.checked;(state.schedules||[]).forEach(item=>toggleScheduleSelection(item.id,checked));updateScheduleBulkUi();};
+    if(remove)remove.onclick=deleteSelectedSchedules;
+    if(exit)exit.onclick=()=>setScheduleSelectMode(false);
+}
 function renderSchedule(){
     const container = $('scheduleList');
     if(!container) return;
-    const sorted = [...state.schedules].sort((a,b) => (a.date + (a.time||'')).localeCompare(b.date + (b.time||'')));
-    container.innerHTML = sorted.length ? sorted.map(s => `
-        <div class="todo">
-            <div>
-                <b>${s.date} ${s.time ? '• ' + s.time : ''}</b> - <span class="tag">${esc(s.type)}</span>
-                <div>${esc(s.title)}</div>
+    const scheduleEscape=typeof window.esc==='function'?window.esc:(v=>String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])));
+    const sorted = [...(state.schedules||[])].sort((a,b) => (a.date + (a.time||'')).localeCompare(b.date + (b.time||'')));
+    container.innerHTML = sorted.length ? sorted.map(s => {
+        const id=String(s.id), selected=selectedScheduleIds.has(id);
+        return `<div class="todo schedule-item ${selected?'is-selected':''}" data-schedule-id="${scheduleEscape(id)}">
+            <div class="schedule-item-main">
+                <input class="schedule-item-select" type="checkbox" data-schedule-id="${scheduleEscape(id)}" ${selected?'checked':''} ${scheduleSelectMode?'':'hidden'} aria-label="Chọn lịch ${scheduleEscape(s.title||'')}">
+                <div>
+                    <b>${scheduleEscape(s.date)} ${s.time ? '• ' + scheduleEscape(s.time) : ''}</b> - <span class="tag">${scheduleEscape(s.type)}</span>
+                    <div>${scheduleEscape(s.title)}</div>
+                </div>
             </div>
-            <button class="btn danger sm" onclick="del('schedules', '${s.id}')">Xóa</button>
-        </div>
-    `).join('') : '<div class="empty">Chưa có lịch trình.</div>';
+            <div class="schedule-item-actions"><button class="btn danger sm" onclick="del('schedules', '${scheduleEscape(id)}')">Xóa</button></div>
+        </div>`;
+    }).join('') : '<div class="empty">Chưa có lịch trình.</div>';
+    bindScheduleBulkControls();
+    updateScheduleBulkUi();
+    let longPressTriggered=false;
+    const clearLongPress=()=>{clearTimeout(scheduleLongPressTimer);scheduleLongPressTimer=0;};
+    container.onpointerdown=(event)=>{
+      const item=event.target.closest('.schedule-item');
+      if(!item||event.target.closest('button,input,a'))return;
+      clearLongPress();
+      scheduleLongPressTimer=setTimeout(()=>{
+        longPressTriggered=true;setScheduleSelectMode(true);toggleScheduleSelection(scheduleIdFromNode(item),true);
+        if(navigator.vibrate)navigator.vibrate(20);
+      },550);
+    };
+    container.onpointerup=clearLongPress;container.onpointercancel=clearLongPress;container.onpointerleave=clearLongPress;
+    container.onclick=(event)=>{
+      const item=event.target.closest('.schedule-item');
+      if(!item||event.target.closest('button,input,a'))return;
+      if(longPressTriggered){longPressTriggered=false;return;}
+      if(scheduleSelectMode)toggleScheduleSelection(scheduleIdFromNode(item),!selectedScheduleIds.has(scheduleIdFromNode(item)));
+    };
+    container.onchange=(event)=>{
+      if(event.target.matches('.schedule-item-select'))toggleScheduleSelection(event.target.dataset.scheduleId,event.target.checked);
+    };
 }
 
 /* MOMENTS & TIMELINE */

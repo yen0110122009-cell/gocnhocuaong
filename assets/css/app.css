@@ -753,3 +753,29 @@ html,body{overflow-x:hidden}
   #summary .achievement-list{min-width:0}
 }
 
+
+
+/* Bulk schedule selection: UI-only, does not change stored schedule shape. */
+.schedule-bulk-bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:10px 12px;margin-bottom:8px;border:1px solid var(--line);border-radius:12px;background:color-mix(in srgb,var(--pink) 34%,#fff 66%)}
+.schedule-bulk-bar[hidden]{display:none}
+.schedule-select-all{display:inline-flex;align-items:center;gap:7px;font-weight:800;cursor:pointer}
+.schedule-select-all input,.schedule-item-select{width:19px;height:19px;accent-color:var(--red);cursor:pointer}
+.schedule-long-press-hint{margin:0 0 9px;font-size:12px}
+.schedule-long-press-hint[hidden]{display:none}
+.schedule-item{position:relative;touch-action:manipulation;user-select:none}
+.schedule-item.is-selected{outline:2px solid color-mix(in srgb,var(--red) 72%,transparent);background:color-mix(in srgb,var(--pink) 38%,#fff 62%)}
+.schedule-item-main{display:flex;align-items:flex-start;gap:10px;min-width:0;flex:1}
+.schedule-item-main>div{min-width:0}
+.schedule-item-select{flex:0 0 auto;margin-top:3px}
+.schedule-item-actions{display:flex;align-items:center;gap:7px;flex-wrap:wrap;justify-content:flex-end}
+@media (max-width:640px){
+  .schedule-bulk-bar{align-items:stretch;gap:8px}
+  .schedule-bulk-bar>*{min-height:40px}
+  .schedule-bulk-bar .schedule-select-all{flex:1 1 100%}
+  .schedule-bulk-bar .btn{flex:1 1 auto}
+  .schedule-item{align-items:flex-start!important;gap:8px!important}
+  .schedule-item-main{align-items:flex-start}
+  .schedule-item-actions{width:100%;justify-content:flex-start;margin-left:28px}
+  .schedule-item-actions .btn{min-height:40px}
+}
+@media (prefers-reduced-motion: reduce){.schedule-item{transition:none!important}}
