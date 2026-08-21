@@ -2593,11 +2593,36 @@ function renderHabitQuickSummary(){
     }
 }
 
+function habitDayMeta(ym,day){
+    const date=new Date(`${ym}-${String(day).padStart(2,'0')}T12:00:00`),weekday=Number.isNaN(date.getTime())?0:date.getDay();
+    return {weekday,label:['CN','T2','T3','T4','T5','T6','T7'][weekday],iso:`${ym}-${String(day).padStart(2,'0')}`};
+}
+function setHabitWeekGroups(open){
+    document.querySelectorAll('#habitGrid .habit-week-group').forEach(group=>{group.open=Boolean(open)});
+}
 function renderHabits(){
     const ym=currentHabitMonth,days=daysInMonth(ym),ownerId=accountOwnerId(),a=ensureHabits(ym).filter(h=>!h.ownerId||String(h.ownerId)===String(ownerId));
     renderHabitQuickSummary();
-    $('habitGrid').innerHTML=`<div class="habitrow" style="background:var(--pink);font-weight:700"><div class="name">Thói quen</div>${Array.from({length:days},(_,i)=>`<div>${i+1}</div>`).join('')}<div>%</div></div>`+a.map(h=>{const done=Array.from({length:days},(_,i)=>h.days[i+1]).filter(Boolean).length,p=Math.round(done/days*100);return `<div class="habitrow"><div class="name"><b>${esc(h.name)}</b><br><span class="muted">Mục tiêu ${h.target} ngày • ${done}/${days}</span></div>${Array.from({length:days},(_,i)=>`<div><div class="check ${h.days[i+1]?'on':''}" onclick="toggleHabit('${h.id}',${i+1})">${h.days[i+1]?'✓':''}</div></div>`).join('')}<div><b>${p}%</b><br><button class="btn light sm" onclick="editHabit('${h.id}')">Sửa</button><button class="btn danger sm" onclick="deleteHabit('${h.id}')">Xóa</button></div></div>`}).join('')||'<div class="empty">Tháng này chưa có thói quen.</div>';
-    const stats=a.map(h=>{const done=Object.values(h.days).filter(Boolean).length;return {h,done,p:Math.round(done/days*100)}});
+    const grid=$('habitGrid');
+    if(grid){
+      if(!a.length){
+        grid.innerHTML='<div class="empty">Tháng này chưa có thói quen.</div>';
+      }else{
+        const weekGroups=[];
+        for(let start=1;start<=days;start+=7){
+          const end=Math.min(days,start+6),count=end-start+1;
+          const header=Array.from({length:count},(_,offset)=>{const day=start+offset,meta=habitDayMeta(ym,day);return `<div class="habit-day-col habit-day-w${meta.weekday}" data-date="${meta.iso}"><b>${day}</b><small>${meta.label}</small></div>`}).join('');
+          const rows=a.map(h=>{
+            const done=Array.from({length:days},(_,i)=>Boolean(h.days?.[i+1])).filter(Boolean).length,p=Math.round(done/days*100);
+            const cells=Array.from({length:count},(_,offset)=>{const day=start+offset,meta=habitDayMeta(ym,day),checked=Boolean(h.days?.[day]);return `<div class="habit-day-cell habit-day-w${meta.weekday}"><div class="check ${checked?'on':''}" aria-label="${esc(`${h.name||'Thói quen'} ngày ${day}`)}" onclick="toggleHabit('${h.id}',${day})">${checked?'✓':''}</div></div>`}).join('');
+            return `<div class="habitrow habit-data-row"><div class="name"><b>${esc(h.name)}</b><br><span class="muted">Mục tiêu ${h.target} ngày • ${done}/${days}</span></div>${cells}<div class="habit-percent"><b>${p}%</b><br><button class="btn light sm" onclick="editHabit('${h.id}')">Sửa</button><button class="btn danger sm" onclick="deleteHabit('${h.id}')">Xóa</button></div></div>`;
+          }).join('');
+          weekGroups.push(`<details class="habit-week-group" ${start===1?'open':''}><summary><span>Tuần ${Math.ceil(start/7)} • ngày ${start}–${end}</span><span class="tag">${count} ngày • ${a.length} thói quen</span></summary><div class="habit-week-scroll"><div class="habit-week-grid" style="--habit-day-count:${count}"><div class="habitrow habit-header"><div class="name">Thói quen</div>${header}<div>%</div></div>${rows}</div></div></details>`);
+        }
+        grid.innerHTML=weekGroups.join('');
+      }
+    }
+    const stats=a.map(h=>{const done=Object.values(h.days||{}).filter(Boolean).length;return {h,done,p:Math.round(done/days*100)}});
     $('habitMonthStats').innerHTML=stats.map(s=>`<div style="margin:9px 0"><b>${esc(s.h.name)}</b><span style="float:right">${s.p}%</span><div class="progress"><i style="width:${s.p}%"></i></div><small>${s.done} ngày / mục tiêu ${s.h.target} ngày</small></div>`).join('')||'Chưa có dữ liệu.';
     $('habitArchive').innerHTML=Object.keys(state.habits).sort().reverse().map(m=>`<button class="btn light sm" onclick="currentHabitMonth='${m}';$('habitMonth').value='${m}';renderHabits()">${m}</button>`).join(' ')||'Chưa có tháng lưu.';
 }
@@ -4301,12 +4326,26 @@ if(typeof old==='function'){
     const snapshot=pending;pending=null;
     inflight=(async()=>{
       try{
-        const remotePayload=await readEnvelope();
-        const payload=mergeForWrite(remotePayload||{},snapshot);
         const url=endpoint()+'?id=eq.'+encodeURIComponent(CFG.id);
-        const res=await request(url,{method:'PATCH',headers:headers({Prefer:'return=minimal'}),body:JSON.stringify({payload})});
-        if(!res.ok)throw new Error('PATCH không thành công');
-        const applied=unwrap(payload);lastSyncedState=clone(applied.state);lastSyncedExternal=clone(applied.external);lastCloudEnvelope=payload;
+        let finalPayload=null;
+        for(let attempt=0;attempt<2;attempt++){
+          const remotePayload=await readEnvelope();
+          const payload=mergeForWrite(remotePayload||{},snapshot);
+          const res=await request(url,{method:'PATCH',headers:headers({Prefer:'return=minimal'}),body:JSON.stringify({payload})});
+          if(!res.ok)throw new Error('PATCH không thành công');
+          finalPayload=payload;
+
+          // Đọc xác nhận để phát hiện race: thiết bị khác có thể đã PATCH sau
+          // lần đọc đầu tiên và làm mất một phần snapshot local. Khi đó,
+          // cập nhật baseline theo cloud mới nhất rồi rebase/retry một lần.
+          const verifiedPayload=await readEnvelope();
+          const verified=unwrap(verifiedPayload||payload);
+          const rebased=mergeForWrite(verifiedPayload||payload,snapshot);
+          const conflict=stable(verified.state)!==stable(rebased.state)||stable(verified.external)!==stable(rebased.external);
+          if(!conflict||attempt===1){finalPayload=verifiedPayload||payload;break;}
+          lastSyncedState=clone(verified.state);lastSyncedExternal=clone(verified.external);
+        }
+        const applied=unwrap(finalPayload||{});lastSyncedState=clone(applied.state);lastSyncedExternal=clone(applied.external);lastCloudEnvelope=finalPayload;
         console.log('☁️ Supabase V2: đã lưu toàn bộ state và kho ngoài.');return true;
       }catch(e){pending=snapshot;console.warn('☁️ Supabase V2: lưu thất bại, sẽ giữ hàng đợi để thử lại',e);return false}
     })().finally(()=>{inflight=null;if(pending)setTimeout(flush,0)});

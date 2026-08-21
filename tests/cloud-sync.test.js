@@ -36,7 +36,7 @@ function response(status, body) {
   };
 }
 
-function makeHarness({ initialState, remoteState, remoteExternal = null } = {}) {
+function makeHarness({ initialState, remoteState, remoteExternal = null, concurrentPayloadAfterFirstPatch = null } = {}) {
   const localStorage = new MemoryStorage();
   let serverPayload = {
     ...(clone(remoteState) || {}),
@@ -50,6 +50,7 @@ function makeHarness({ initialState, remoteState, remoteExternal = null } = {}) 
   };
   const calls = [];
   let saveStateCalls = 0;
+  let patchCount = 0;
 
   const state = clone(initialState || { userData: { _initialized: true, accounts: {} } });
   const context = {
@@ -74,6 +75,9 @@ function makeHarness({ initialState, remoteState, remoteExternal = null } = {}) 
       if (method === 'GET') return response(200, [{ payload: clone(serverPayload) }]);
       if (method === 'PATCH') {
         serverPayload = JSON.parse(options.body).payload;
+        patchCount += 1;
+        // Mô phỏng thiết bị B hoàn tất push ngay sau PATCH đầu tiên của thiết bị A.
+        if (patchCount === 1 && concurrentPayloadAfterFirstPatch) serverPayload = clone(concurrentPayloadAfterFirstPatch);
         return response(204);
       }
       if (method === 'POST') {
@@ -205,4 +209,73 @@ test('test harness không gọi endpoint Supabase thật', async () => {
   assert.ok(h.calls.length > 0);
   assert.ok(h.calls.every(call => call.url.includes('cuompgnxcbzufaeodgvx.supabase.co')));
   assert.ok(h.calls.every(call => call.body === null || typeof call.body === 'object'));
+});
+
+test('xung đột đồng thời hai thiết bị: rebase sau PATCH không làm mất dữ liệu và metadata', async () => {
+  const id = 'member-concurrent-1';
+  const base = stateWithAccount(id, account({
+    savedAt: 1700000000000,
+    todos: [{ id: 'todo-base', title: 'Bản ghi nền', date: '2026-08-21', ownerId: id, createdAt: '2026-08-21T07:00:00.000Z', updatedAt: '2026-08-21T07:00:00.000Z' }],
+    habits: { '2026-08': [{ id: 'habit-base', name: 'Thói quen nền', ownerId: id, createdAt: '2026-08-21T07:00:00.000Z', updatedAt: '2026-08-21T07:00:00.000Z' }] }
+  }));
+  delete base.sessionAuth;
+
+  const deviceA = stateWithAccount(id, account({
+    todos: [{ id: 'todo-a', title: 'Thiết bị A', date: '2026-08-21', ownerId: id, createdAt: '2026-08-21T08:00:00.000Z', updatedAt: '2026-08-21T08:00:00.000Z' }],
+    habits: { '2026-08': [{ id: 'habit-a', name: 'Thói quen A', ownerId: id, createdAt: '2026-08-21T08:00:00.000Z', updatedAt: '2026-08-21T08:00:00.000Z' }] }
+  }));
+  const deviceB = stateWithAccount(id, account({
+    todos: [
+      { id: 'todo-base', title: 'Bản ghi nền', date: '2026-08-21', ownerId: id, createdAt: '2026-08-21T07:00:00.000Z', updatedAt: '2026-08-21T07:00:00.000Z' },
+      { id: 'todo-b', title: 'Thiết bị B', date: '2026-08-21', ownerId: id, createdAt: '2026-08-21T08:01:00.000Z', updatedAt: '2026-08-21T08:01:00.000Z' }
+    ],
+    habits: { '2026-08': [
+      { id: 'habit-base', name: 'Thói quen nền', ownerId: id, createdAt: '2026-08-21T07:00:00.000Z', updatedAt: '2026-08-21T07:00:00.000Z' },
+      { id: 'habit-b', name: 'Thói quen B', ownerId: id, createdAt: '2026-08-21T08:01:00.000Z', updatedAt: '2026-08-21T08:01:00.000Z' }
+    ] }
+  }));
+  delete deviceB.sessionAuth;
+
+  const h = makeHarness({
+    initialState: deviceA,
+    remoteState: base,
+    concurrentPayloadAfterFirstPatch: {
+      ...deviceB,
+      __studyEmpireSync: {
+        version: 2,
+        externalStores: {},
+        clientId: 'device-b',
+        seq: 4,
+        savedAt: '2026-08-21T08:01:00.000Z'
+      }
+    }
+  });
+
+  assert.equal(await h.sync.push(), true);
+  const pushed = accountFromPayload(h.serverPayload, id);
+  const todoIds = new Set(pushed.todos.map(row => row.id));
+  const habitIds = new Set(pushed.habits['2026-08'].map(row => row.id));
+  assert.ok(todoIds.has('todo-base'), 'Không được mất bản ghi nền');
+  assert.ok(todoIds.has('todo-a'), 'Không được mất dữ liệu thiết bị A');
+  assert.ok(todoIds.has('todo-b'), 'Không được mất dữ liệu thiết bị B');
+  assert.ok(habitIds.has('habit-base') && habitIds.has('habit-a') && habitIds.has('habit-b'), 'Phải giữ habit của cả hai thiết bị');
+  for (const row of [...pushed.todos, ...pushed.habits['2026-08']]) {
+    assert.match(row.createdAt, /^2026-08-21T/);
+    assert.match(row.updatedAt, /^2026-08-21T/);
+  }
+  assert.ok(h.calls.filter(call => call.method === 'PATCH').length >= 2, 'Xung đột phải kích hoạt ít nhất một lần rebase/retry');
+});
+
+ test('xung đột cùng một id chọn bản ghi có updatedAt mới hơn', async () => {
+  const id = 'member-concurrent-2';
+  const remote = stateWithAccount(id, account({
+    todos: [{ id: 'todo-shared', title: 'Thiết bị B mới hơn', ownerId: id, updatedAt: '2026-08-21T10:00:00.000Z', createdAt: '2026-08-21T07:00:00.000Z' }]
+  }));
+  delete remote.sessionAuth;
+  const local = stateWithAccount(id, account({
+    todos: [{ id: 'todo-shared', title: 'Thiết bị A cũ hơn', ownerId: id, updatedAt: '2026-08-21T09:00:00.000Z', createdAt: '2026-08-21T07:00:00.000Z' }]
+  }));
+  const h = makeHarness({ initialState: local, remoteState: remote });
+  assert.equal(await h.sync.push(), true);
+  assert.equal(accountFromPayload(h.serverPayload, id).todos.find(row => row.id === 'todo-shared').title, 'Thiết bị B mới hơn');
 });
