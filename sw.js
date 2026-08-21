@@ -1,4 +1,4 @@
-const STATIC_CACHE = 'gocnhocuaong-static-v7';
+const STATIC_CACHE = 'gocnhocuaong-static-v8';
 const STATIC_ASSETS = [
   './assets/css/app.css',
   './assets/js/app.js'

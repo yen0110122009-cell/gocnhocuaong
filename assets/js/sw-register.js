@@ -4,7 +4,7 @@
   if (location.protocol !== 'https:' && !isLocal) return;
 
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('./sw.js?sw-refresh=v7', { scope: './' })
+    navigator.serviceWorker.register('./sw.js?sw-refresh=v8', { scope: './' })
       .then(registration => {
         registration.update().catch(() => {});
       })
