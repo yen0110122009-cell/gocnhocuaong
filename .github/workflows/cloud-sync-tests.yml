@@ -31,3 +31,45 @@ jobs:
 
       - name: Run cloud sync tests
         run: npm test
+
+  notify-on-failure:
+    name: Notify cloud sync test failure
+    if: ${{ always() && needs.cloud-sync.result == 'failure' }}
+    needs: [cloud-sync]
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    env:
+      SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+    steps:
+      - name: Notify Slack
+        if: ${{ env.SLACK_WEBHOOK_URL != '' }}
+        env:
+          GH_RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          payload=$(jq -n --arg text "Cloud sync tests failed in $GITHUB_REPOSITORY on $GITHUB_REF_NAME. Run: $GH_RUN_URL" '{text:$text}')
+          curl --fail-with-body --silent --show-error -X POST \
+            -H 'Content-Type: application/json' \
+            --data "$payload" \
+            "$SLACK_WEBHOOK_URL"
+
+      - name: Notify Telegram
+        if: ${{ env.TELEGRAM_BOT_TOKEN != '' && env.TELEGRAM_CHAT_ID != '' }}
+        env:
+          GH_RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          curl --fail-with-body --silent --show-error -X POST \
+            "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+            --data-urlencode "chat_id=${TELEGRAM_CHAT_ID}" \
+            --data-urlencode "text=Cloud sync tests failed in ${GITHUB_REPOSITORY} on ${GITHUB_REF_NAME}. Run: ${GH_RUN_URL}"
+
+      - name: Explain missing notification secrets
+        if: ${{ env.SLACK_WEBHOOK_URL == '' && (env.TELEGRAM_BOT_TOKEN == '' || env.TELEGRAM_CHAT_ID == '') }}
+        run: |
+          {
+            echo '## Notifications not configured'
+            echo 'Set SLACK_WEBHOOK_URL or both TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID as repository secrets to receive failure alerts.'
+          } >> "$GITHUB_STEP_SUMMARY"

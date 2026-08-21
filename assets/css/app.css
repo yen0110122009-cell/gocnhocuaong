@@ -902,3 +902,53 @@ html,body{overflow-x:hidden}
 .journey-entry .actions{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
 .history-v21-actions{display:flex;flex-wrap:wrap;gap:7px}
 @media (max-width:640px){.history-time-year>summary,.history-time-month>summary,.history-time-day>summary,.schedule-time-group>summary{padding:10px;font-size:13px}.history-time-year-body,.history-time-month-body{padding:0 6px 6px}.history-time-day-body{padding:5px}.journey-entry .actions .btn{flex:1 1 auto}}
+
+
+/* HABIT COMPACT MONTH SUMMARY + WEEK GROUPS */
+.habit-quick-card>summary{cursor:pointer;list-style:none;display:flex;align-items:flex-start;justify-content:space-between;gap:14px}
+.habit-quick-card>summary::-webkit-details-marker{display:none}
+.habit-quick-card>summary::before{content:'＋';flex:0 0 auto;order:2;font-size:20px;line-height:1;color:var(--red);margin-top:2px}
+.habit-quick-card[open]>summary::before{content:'−'}
+.habit-quick-card[open]>summary{margin-bottom:14px}
+.habit-quick-card:not([open])>summary{margin-bottom:0}
+.habit-quick-card>summary h3{margin:0 0 4px}
+.habit-quick-card>summary p{margin:0}
+.habit-grid-card{min-width:0}
+.habit-grid-toolbar{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:12px}
+.habit-grid-toolbar>div:first-child{display:grid;gap:3px;min-width:0}
+.habit-grid-toolbar .muted{font-size:12px}
+.habit-grid-toolbar .actions{margin:0;display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end}
+.habit-grid{display:grid;gap:10px;overflow:visible}
+.habit-week-group{margin:0;border:1px solid var(--line);border-radius:14px;background:rgba(255,255,255,.42);overflow:hidden}
+.habit-week-group>summary{cursor:pointer;list-style:none;padding:10px 12px;font-weight:900;display:flex;align-items:center;justify-content:space-between;gap:10px;color:var(--ink)}
+.habit-week-group>summary::-webkit-details-marker{display:none}
+.habit-week-group>summary::before{content:'＋';font-size:18px;color:var(--red);margin-right:2px}
+.habit-week-group[open]>summary::before{content:'−'}
+.habit-week-group>summary>span:first-child{min-width:0;overflow-wrap:anywhere}
+.habit-week-scroll{overflow-x:auto;padding:0 8px 8px}
+.habit-week-grid{width:max-content;min-width:100%}
+.habit-week-grid .habitrow{grid-template-columns:minmax(180px,1fr) repeat(var(--habit-day-count),30px) 82px;min-width:calc(180px + 30px * 7 + 82px);gap:2px}
+.habit-week-grid .habitrow>div{padding:5px 3px;text-align:center;font-size:11px}
+.habit-week-grid .habitrow .name{text-align:left}
+.habit-week-grid .habit-header{border-bottom:1px solid var(--line);font-weight:800;background:color-mix(in srgb,var(--pink) 58%,white 42%)}
+.habit-week-grid .habit-header .habit-day-col{display:grid;gap:1px;justify-items:center;border-radius:7px;padding:4px 2px}
+.habit-day-col small{font-size:9px;color:var(--muted);font-weight:700}
+.habit-day-cell{border-radius:7px;display:grid;place-items:center}
+.habit-day-cell .check{margin:auto}
+.habit-day-w0{background:rgba(255,205,205,.34)}
+.habit-day-w1{background:rgba(218,234,255,.48)}
+.habit-day-w2{background:rgba(226,244,224,.58)}
+.habit-day-w3{background:rgba(255,241,194,.60)}
+.habit-day-w4{background:rgba(235,222,255,.50)}
+.habit-day-w5{background:rgba(214,244,242,.58)}
+.habit-day-w6{background:rgba(255,225,198,.58)}
+.habit-week-grid .habit-percent{white-space:nowrap}
+.habit-week-grid .habit-percent .btn{margin:2px 0 0 2px}
+@media (max-width:760px){
+  .habit-grid-toolbar{display:block}
+  .habit-grid-toolbar .actions{justify-content:flex-start;margin-top:9px}
+  .habit-grid-toolbar .actions .btn{flex:1 1 auto}
+  .habit-week-group>summary{padding:9px 10px;font-size:12px}
+  .habit-week-scroll{padding-left:5px;padding-right:5px}
+}
+@media (prefers-reduced-motion:reduce){.habit-quick-card *,.habit-grid-card *{scroll-behavior:auto}}
