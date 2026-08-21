@@ -36,7 +36,7 @@ function response(status, body) {
   };
 }
 
-function makeHarness({ initialState, remoteState, remoteExternal = null, concurrentPayloadAfterFirstPatch = null } = {}) {
+function makeHarness({ initialState, remoteState, remoteExternal = null, concurrentPayloadAfterFirstPatch = null, startOffline = false } = {}) {
   const localStorage = new MemoryStorage();
   let serverPayload = {
     ...(clone(remoteState) || {}),
@@ -51,6 +51,7 @@ function makeHarness({ initialState, remoteState, remoteExternal = null, concurr
   const calls = [];
   let saveStateCalls = 0;
   let patchCount = 0;
+  let networkOnline = !startOffline;
 
   const state = clone(initialState || { userData: { _initialized: true, accounts: {} } });
   const context = {
@@ -59,7 +60,7 @@ function makeHarness({ initialState, remoteState, remoteExternal = null, concurr
     JSON,
     Math,
     Promise,
-    setTimeout,
+    setTimeout: (fn, _ms, ...args) => setTimeout(fn, 0, ...args),
     clearTimeout,
     localStorage,
     state,
@@ -72,6 +73,7 @@ function makeHarness({ initialState, remoteState, remoteExternal = null, concurr
     fetch: async (url, options = {}) => {
       const method = String(options.method || 'GET').toUpperCase();
       calls.push({ method, url: String(url), body: options.body ? JSON.parse(options.body) : null });
+      if (!networkOnline) throw new TypeError('Failed to fetch: simulated network disconnect');
       if (method === 'GET') return response(200, [{ payload: clone(serverPayload) }]);
       if (method === 'PATCH') {
         serverPayload = JSON.parse(options.body).payload;
@@ -95,7 +97,8 @@ function makeHarness({ initialState, remoteState, remoteExternal = null, concurr
     sync: context.window.studyEmpireCloudSync,
     calls,
     get serverPayload() { return clone(serverPayload); },
-    get saveStateCalls() { return saveStateCalls; }
+    get saveStateCalls() { return saveStateCalls; },
+    setNetworkOnline(value) { networkOnline = Boolean(value); }
   };
 }
 
@@ -278,4 +281,35 @@ test('xung đột đồng thời hai thiết bị: rebase sau PATCH không làm 
   const h = makeHarness({ initialState: local, remoteState: remote });
   assert.equal(await h.sync.push(), true);
   assert.equal(accountFromPayload(h.serverPayload, id).todos.find(row => row.id === 'todo-shared').title, 'Thiết bị B mới hơn');
+});
+
+
+test('mất kết nối mạng đột ngột khi đang push giữ pending snapshot và retry không mất dữ liệu', async () => {
+  const id = 'member-network-drop-1';
+  const remote = stateWithAccount(id, account({
+    todos: [{ id: 'todo-remote', title: 'Bản ghi cloud', date: '2026-08-21', ownerId: id, createdAt: '2026-08-21T07:00:00.000Z', updatedAt: '2026-08-21T07:00:00.000Z' }],
+    habits: { '2026-08': [{ id: 'habit-remote', name: 'Thói quen cloud', ownerId: id, createdAt: '2026-08-21T07:00:00.000Z', updatedAt: '2026-08-21T07:00:00.000Z' }] }
+  }));
+  delete remote.sessionAuth;
+  const local = stateWithAccount(id, account({
+    todos: [{ id: 'todo-local', title: 'Bản ghi local', date: '2026-08-21', ownerId: id, createdAt: '2026-08-21T08:00:00.000Z', updatedAt: '2026-08-21T08:00:00.000Z' }],
+    habits: { '2026-08': [{ id: 'habit-local', name: 'Thói quen local', ownerId: id, createdAt: '2026-08-21T08:00:00.000Z', updatedAt: '2026-08-21T08:00:00.000Z' }] }
+  }));
+  const h = makeHarness({ initialState: local, remoteState: remote, startOffline: true });
+  const beforeDisconnect = h.serverPayload;
+
+  assert.equal(await h.sync.push(), false, 'Push phải báo thất bại khi mất mạng');
+  assert.deepEqual(h.serverPayload, beforeDisconnect, 'Mất mạng trước PATCH không được làm thay đổi snapshot cloud');
+  assert.equal(h.sync.status().pending, true, 'Snapshot local phải được giữ trong hàng đợi retry');
+  assert.equal(h.calls.filter(call => call.method === 'PATCH').length, 0, 'Không được có PATCH thành công khi đang offline');
+
+  h.setNetworkOnline(true);
+  assert.equal(await h.sync.flush(), true, 'Flush lại phải thành công sau khi mạng khôi phục');
+  const pushed = accountFromPayload(h.serverPayload, id);
+  assert.ok(pushed.todos.some(row => row.id === 'todo-remote'), 'Retry phải giữ bản ghi cloud');
+  assert.ok(pushed.todos.some(row => row.id === 'todo-local'), 'Retry phải giữ bản ghi local');
+  assert.ok(pushed.habits['2026-08'].some(row => row.id === 'habit-remote'), 'Retry phải giữ habit cloud');
+  assert.ok(pushed.habits['2026-08'].some(row => row.id === 'habit-local'), 'Retry phải giữ habit local');
+  assert.equal(h.sync.status().pending, false, 'Hàng đợi phải được dọn sau khi retry thành công');
+  assert.ok(h.calls.filter(call => call.method === 'PATCH').length >= 1, 'Retry phải thực hiện PATCH sau khi mạng khôi phục');
 });
