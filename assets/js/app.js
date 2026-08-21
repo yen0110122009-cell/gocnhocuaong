@@ -2067,6 +2067,7 @@ function toggleTodoDone(id, checked){
 
     // Vẽ riêng danh sách To-do ngay lập tức, sau đó lưu cloud không render lại toàn trang.
     renderTodos();
+    renderTodayDashboard();
     persistActiveUserData();
     save({render:false});
 }
@@ -2130,6 +2131,28 @@ function renderFounderSubjectStats(){
   el.innerHTML=entries.length ? entries.map(([subject,min])=>`<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--line)"><b>📚 ${esc(subject)}</b><span>${fmtMin(min)}</span></div>`).join('') : '<div class="empty">Chưa có dữ liệu thời gian học theo môn.</div>';
 }
 
+let todayTodoFilter='all';
+function todoCompletionISO(todo){
+  const raw=String(todo?.completedAt||'').trim();
+  if(/^\\d{4}-\\d{2}-\\d{2}$/.test(raw)) return raw;
+  if(raw){const date=new Date(raw);if(!Number.isNaN(date.getTime()))return toISODate(date);}
+  return todo?.done?String(todo?.date||''):'';
+}
+function currentWeekRangeISO(){
+  const today=new Date(),day=today.getDay(),diff=day===0?-6:1-day;
+  const start=new Date(today);start.setHours(12,0,0,0);start.setDate(start.getDate()+diff);
+  const end=new Date(start);end.setDate(end.getDate()+6);
+  return {start:toISODate(start),end:toISODate(end)};
+}
+function countCompletedTodosThisWeek(todos){
+  const range=currentWeekRangeISO();
+  return todos.filter(x=>x.done).filter(x=>{const date=todoCompletionISO(x);return date>=range.start&&date<=range.end;}).length;
+}
+function setTodayTodoFilter(value){
+  todayTodoFilter=['all','pending','done'].includes(value)?value:'all';
+  renderTodayDashboard();
+}
+window.setTodayTodoFilter=setTodayTodoFilter;
 function renderTodayDashboard(){
   const host=$('todayDashboard');
   if(!host)return;
@@ -2144,6 +2167,8 @@ function renderTodayDashboard(){
   const goalMin=Math.max(1,Number(state.goals?.day)||120);
   const doneTodos=todos.filter(x=>x.done).length;
   const pendingTodos=todos.length-doneTodos;
+  const completedThisWeek=countCompletedTodosThisWeek(scoped.todos||[]);
+  const visibleTodos=todos.filter(x=>todayTodoFilter==='done'?x.done:todayTodoFilter==='pending'?!x.done:true);
   const todoPct=todos.length?Math.min(100,Math.round(doneTodos/todos.length*100)):0;
   const studyPct=Math.min(100,Math.round(mins/goalMin*100));
   const habitTarget=habits.reduce((sum,h)=>sum+Math.max(0,Number(h?.target)||0),0);
@@ -2155,21 +2180,24 @@ function renderTodayDashboard(){
   const statRows=[
     {value:`${pendingTodos}`,label:'Việc còn lại',progress:null},
     {value:`${doneTodos}/${todos.length}`,label:`Việc hoàn thành (${todoPct}%)`,progress:todoPct},
+    {value:`${completedThisWeek}`,label:'Việc hoàn thành tuần này',progress:null},
     {value:fmtMin(mins),label:`Thời gian học / ${fmtMin(goalMin)}`,progress:studyPct},
     {value:`${habitDone}/${habitTarget}`,label:`Lượt thói quen (${habitPct}%)`,progress:habitPct}
   ];
   const statBox=(row)=>`<div class="today-dashboard-stat"><strong>${esc(row.value)}</strong><span>${esc(row.label)}</span>${row.progress===null?'':`<div class="progress" aria-label="${esc(row.label)}"><i style="width:${row.progress}%"></i></div>`}</div>`;
   const todoLabel=(x)=>x.done?'Đã xong':(x.priority==='cao'?'Ưu tiên cao':x.priority==='trung'?'Ưu tiên trung bình':'Chưa hoàn thành');
-  const todoRows=orderedTodos.map(x=>`<label class="today-dashboard-item ${x.done?'done':''}" for="today-todo-${esc(x.id)}"><span class="today-dashboard-item-main"><span class="today-dashboard-item-title">${esc(x.title||'Việc chưa đặt tên')}</span><span class="today-dashboard-item-meta">${esc([x.time,todoLabel(x)].filter(Boolean).join(' • '))}</span></span><input class="today-dashboard-todo-check" id="today-todo-${esc(x.id)}" type="checkbox" ${x.done?'checked':''} onchange="toggleTodoDone('${esc(x.id)}', this.checked)" aria-label="Đánh dấu ${esc(x.title||'Việc chưa đặt tên')} hoàn thành"></label>`).join('');
+  const todoRows=visibleTodos.map(x=>`<label class="today-dashboard-item ${x.done?'done':''}" for="today-todo-${esc(x.id)}"><span class="today-dashboard-item-main"><span class="today-dashboard-item-title">${esc(x.title||'Việc chưa đặt tên')}</span><span class="today-dashboard-item-meta">${esc([x.time,todoLabel(x)].filter(Boolean).join(' • '))}</span></span><input class="today-dashboard-todo-check" id="today-todo-${esc(x.id)}" type="checkbox" ${x.done?'checked':''} onchange="toggleTodoDone('${esc(x.id)}', this.checked)" aria-label="Đánh dấu ${esc(x.title||'Việc chưa đặt tên')} hoàn thành"></label>`).join('');
   const scheduleRows=orderedSchedules.slice(0,5).map(x=>`<div class="today-dashboard-item"><span class="today-dashboard-item-marker">${uiIcon('calendar','Lịch')}</span><div class="today-dashboard-item-main"><div class="today-dashboard-item-title">${esc(x.title||'Lịch chưa đặt tên')}</div><div class="today-dashboard-item-meta">${esc(x.time||'Cả ngày')}${x.note?` • ${esc(x.note)}`:''}</div></div></div>`).join('');
   const more=(count)=>count>5?`<div class="today-dashboard-more">Còn ${count-5} lịch trong dữ liệu hôm nay.</div>`:'';
   const formatDate=new Date(d+'T12:00:00').toLocaleDateString('vi-VN',{weekday:'long',day:'numeric',month:'numeric'});
   $('todayDashboardSubtitle').textContent=`Tóm tắt ${formatDate} từ dữ liệu hiện tại của tài khoản.`;
   $('todayDashboardSync').textContent='State hiện tại • đồng bộ nền';
   $('todayDashboardStats').innerHTML=statRows.map(statBox).join('');
-  $('todayDashboardTodoCount').textContent=`${todos.length} mục`;
+  const filter=$('todayTodoFilter');if(filter)filter.value=todayTodoFilter;
+  $('todayDashboardTodoCount').textContent=todayTodoFilter==='all'?`${todos.length} mục`:`${visibleTodos.length}/${todos.length} mục`;
   $('todayDashboardScheduleCount').textContent=`${schedules.length} lịch`;
-  $('todayDashboardTodos').innerHTML=todoRows||'<div class="empty">Hôm nay chưa có việc.</div>';
+  const todoEmpty=todayTodoFilter==='done'?'Hôm nay chưa có việc đã hoàn thành.':todayTodoFilter==='pending'?'Hôm nay không còn việc chưa hoàn thành.':'Hôm nay chưa có việc.';
+  $('todayDashboardTodos').innerHTML=todoRows||`<div class="empty">${todoEmpty}</div>`;
   $('todayDashboardSchedule').innerHTML=scheduleRows||'<div class="empty">Hôm nay chưa có lịch trình.</div>';
   $('todayDashboardSchedule').insertAdjacentHTML('beforeend',more(schedules.length));
 }
