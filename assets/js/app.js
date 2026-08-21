@@ -597,12 +597,6 @@ function uiIcon(name,label=''){
   const path=UI_ICON_PATHS[name]||UI_ICON_PATHS.todo;
   return `<svg class="ui-icon" viewBox="0 0 24 24" role="img" aria-label="${esc(label)}" focusable="false">${path}</svg>`;
 }
-function moodIconKey(name=''){
-  const map={
-    'Vui':'heart','Bình yên':'moon','Buồn':'moon','Đau lòng':'heart','Lo lắng':'study','Tức giận':'shield','Mệt mỏi':'study','Cô đơn':'leaf','Hy vọng':'leaf','Hứng khởi':'study','Tập trung':'chart','Biết ơn':'heart','Yêu đời':'heart','Phát khóc':'heart','Phấn chấn':'trophy','Thư giãn':'moon','Chán nản':'moon','Tự hào':'crown','Xấu hổ':'user','Bất an':'shield','Ngạc nhiên':'chart','Bực bội':'shield','Chạnh lòng':'heart','Mất mát':'heart','Có động lực':'trophy','Yêu bản thân':'heart'
-  };
-  return map[name]||'heart';
-}
 
 function setupNavAndAdminRole(){
   const role = state.sessionAuth ? state.sessionAuth.role : 'Guest';
@@ -2166,7 +2160,7 @@ function renderTodayDashboard(){
   ];
   const statBox=(row)=>`<div class="today-dashboard-stat"><strong>${esc(row.value)}</strong><span>${esc(row.label)}</span>${row.progress===null?'':`<div class="progress" aria-label="${esc(row.label)}"><i style="width:${row.progress}%"></i></div>`}</div>`;
   const todoLabel=(x)=>x.done?'Đã xong':(x.priority==='cao'?'Ưu tiên cao':x.priority==='trung'?'Ưu tiên trung bình':'Chưa hoàn thành');
-  const todoRows=orderedTodos.map(x=>`<label class="today-dashboard-item ${x.done?'done':''}" for="today-todo-${esc(x.id)}"><input class="today-dashboard-todo-check" id="today-todo-${esc(x.id)}" type="checkbox" ${x.done?'checked':''} onchange="toggleTodoDone('${esc(x.id)}', this.checked)" aria-label="Đánh dấu ${esc(x.title||'Việc chưa đặt tên')} hoàn thành"><span class="today-dashboard-item-marker" aria-hidden="true">${x.done?'✓':'○'}</span><span class="today-dashboard-item-main"><span class="today-dashboard-item-title">${esc(x.title||'Việc chưa đặt tên')}</span><span class="today-dashboard-item-meta">${esc([x.time,todoLabel(x)].filter(Boolean).join(' • '))}</span></span></label>`).join('');
+  const todoRows=orderedTodos.map(x=>`<label class="today-dashboard-item ${x.done?'done':''}" for="today-todo-${esc(x.id)}"><span class="today-dashboard-item-main"><span class="today-dashboard-item-title">${esc(x.title||'Việc chưa đặt tên')}</span><span class="today-dashboard-item-meta">${esc([x.time,todoLabel(x)].filter(Boolean).join(' • '))}</span></span><input class="today-dashboard-todo-check" id="today-todo-${esc(x.id)}" type="checkbox" ${x.done?'checked':''} onchange="toggleTodoDone('${esc(x.id)}', this.checked)" aria-label="Đánh dấu ${esc(x.title||'Việc chưa đặt tên')} hoàn thành"></label>`).join('');
   const scheduleRows=orderedSchedules.slice(0,5).map(x=>`<div class="today-dashboard-item"><span class="today-dashboard-item-marker">${uiIcon('calendar','Lịch')}</span><div class="today-dashboard-item-main"><div class="today-dashboard-item-title">${esc(x.title||'Lịch chưa đặt tên')}</div><div class="today-dashboard-item-meta">${esc(x.time||'Cả ngày')}${x.note?` • ${esc(x.note)}`:''}</div></div></div>`).join('');
   const more=(count)=>count>5?`<div class="today-dashboard-more">Còn ${count-5} lịch trong dữ liệu hôm nay.</div>`:'';
   const formatDate=new Date(d+'T12:00:00').toLocaleDateString('vi-VN',{weekday:'long',day:'numeric',month:'numeric'});
@@ -2211,7 +2205,7 @@ function renderHome(){
 
     $('todayText').innerHTML=`Chào bạn đã đến với trang web của nhóm nhé! 🌷 Không biết hôm nay bạn muốn làm gì nào?<br><span class="muted" style="font-weight:400">${new Date().toLocaleDateString('vi-VN',{weekday:'long',day:'numeric',month:'numeric',year:'numeric'})}</span>`;
     
-    $('homeRealtimeMoodButtons').innerHTML = realtimeThemeDefs.map((m,i)=>`<button type="button" class="mood-btn guest-theme-control ${activeThemeMood===m.name?'selected':''}" data-theme-index="${i}" aria-label="${esc(m.name)}"><span class="mood-icon">${uiIcon(moodIconKey(m.name),m.name)}</span><span class="mood-label">${esc(m.name)}</span></button>`).join('');
+    $('homeRealtimeMoodButtons').innerHTML = realtimeThemeDefs.map((m,i)=>`<button type="button" class="mood-btn guest-theme-control ${activeThemeMood===m.name?'selected':''}" data-theme-index="${i}" aria-label="${esc(m.name)}"><span class="mood-icon">${esc(m.icon)}</span><span class="mood-label">${esc(m.name)}</span></button>`).join('');
     bindRealtimeMoodButtons();
 
     $('homeProgressSummary').innerHTML=`
