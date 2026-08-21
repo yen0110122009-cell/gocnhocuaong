@@ -318,6 +318,9 @@ function scheduleCloudPush(immediate=false){
 }
 
 function save(options={}){
+  /* Tái tính các chỉ số suy ra trước khi ghi: kế hoạch, thói quen và study time
+     phải dùng chung nguồn cho Tổng quan, Thành tích và Bảng xếp hạng. */
+  try{const ownerId=accountOwnerId();if(ownerId)recalculateCurrentProgress(ownerId,{persist:false});}catch(e){console.warn('Không thể tái tính tiến độ trước khi lưu',e);}
   persistActiveUserData();
   saveStateWithoutSession();
   if(!options || options.render!==false) requestRenderAll();
@@ -1665,10 +1668,10 @@ function getOwnerScopedData(ownerId){
   const id=String(ownerId||'');
   const active=String(accountOwnerId()||'');
   if(active===id){
-    return {todos:Array.isArray(state.todos)?state.todos:[], habits:state.habits&&typeof state.habits==='object'?state.habits:{}, sessions:Array.isArray(state.sessions)?state.sessions:[], journals:Array.isArray(state.journals)?state.journals:[], moods:Array.isArray(state.moods)?state.moods:[]};
+    return {todos:Array.isArray(state.todos)?state.todos:[], schedules:Array.isArray(state.schedules)?state.schedules:[], habits:state.habits&&typeof state.habits==='object'?state.habits:{}, sessions:Array.isArray(state.sessions)?state.sessions:[], journals:Array.isArray(state.journals)?state.journals:[], moods:Array.isArray(state.moods)?state.moods:[]};
   }
   const bucket=state.userData?.accounts?.[id]||{};
-  return {todos:Array.isArray(bucket.todos)?bucket.todos:[], habits:bucket.habits&&typeof bucket.habits==='object'?bucket.habits:{}, sessions:Array.isArray(bucket.sessions)?bucket.sessions:[], journals:Array.isArray(bucket.journals)?bucket.journals:[], moods:Array.isArray(bucket.moods)?bucket.moods:[]};
+  return {todos:Array.isArray(bucket.todos)?bucket.todos:[], schedules:Array.isArray(bucket.schedules)?bucket.schedules:[], habits:bucket.habits&&typeof bucket.habits==='object'?bucket.habits:{}, sessions:Array.isArray(bucket.sessions)?bucket.sessions:[], journals:Array.isArray(bucket.journals)?bucket.journals:[], moods:Array.isArray(bucket.moods)?bucket.moods:[]};
 }
 
 function collectCurrentActivityDates(ownerId){
@@ -1993,9 +1996,10 @@ $('saveGoals').onclick=()=>{state.goals.day=+$('goalDay').value||0;state.goals.w
 $('addTodo').onclick=()=>{
     const title=$('todoTitle').value.trim();if(!title)return alert('Bạn nhập nội dung công việc trước nha 🐝🍀');
     const ownerId=accountOwnerId();
-    state.todos.push({id:uid(),ownerId,date:$('todoDate').value||todayISO(),title,priority:$('todoPriority').value,time:$('todoTime').value,note:$('todoNote').value,done:false});
+    const now=new Date().toISOString();
+    state.todos.push({id:uid(),ownerId,date:$('todoDate').value||todayISO(),title,priority:$('todoPriority').value,time:$('todoTime').value,note:$('todoNote').value,done:false,createdAt:now,updatedAt:now});
     updateAccountProgress('task_created',0,ownerId);
-    $('todoTitle').value='';$('todoNote').value='';save()
+    $('todoTitle').value='';$('todoNote').value='';save({immediateCloud:true})
 };
 $('todoSearch').oninput=renderTodos;
 function renderTodos(){
@@ -2015,7 +2019,8 @@ function toggleTodoDone(id, checked){
     }
 
     // Optimistic update: đổi trạng thái ngay, không gọi edit() vì edit() tự save/render.
-    Object.assign(todo,{done:nextDone,completedAt:nextDone?new Date().toISOString():''});
+    const changedAt=new Date().toISOString();
+    Object.assign(todo,{done:nextDone,completedAt:nextDone?changedAt:'',updatedAt:changedAt});
 
     if(todo.ownerId) updateAccountProgress('task_done',0,todo.ownerId,nextDone?1:-1);
 
@@ -2105,11 +2110,12 @@ function renderTodayDashboard(){
   const host=$('todayDashboard');
   if(!host)return;
   const d=todayISO();
-  const todos=Array.isArray(state.todos)?state.todos.filter(x=>x&&x.date===d):[];
-  const schedules=Array.isArray(state.schedules)?state.schedules.filter(x=>x&&x.date===d):[];
-  const currentYM=ymISO();
-  const habits=Array.isArray(state.habits?.[currentYM])?state.habits[currentYM]:[];
   const ownerId=accountOwnerId();
+  const scoped=ownerId?getOwnerScopedData(ownerId):{todos:state.todos||[],schedules:state.schedules||[],habits:state.habits||{}};
+  const todos=Array.isArray(scoped.todos)?scoped.todos.filter(x=>x&&(!x.ownerId||String(x.ownerId)===String(ownerId))&&x.date===d):[];
+  const schedules=Array.isArray(scoped.schedules)?scoped.schedules.filter(x=>x&&(!x.ownerId||String(x.ownerId)===String(ownerId))&&x.date===d):[];
+  const currentYM=ymISO();
+  const habits=Array.isArray(scoped.habits?.[currentYM])?scoped.habits[currentYM].filter(h=>!h.ownerId||String(h.ownerId)===String(ownerId)):[];
   const mins=ownerId?studyMinutesForDate(ownerId,d):0;
   const goalMin=Math.max(1,Number(state.goals?.day)||120);
   const doneTodos=todos.filter(x=>x.done).length;
@@ -2139,7 +2145,7 @@ function renderTodayDashboard(){
   $('todayDashboardStats').innerHTML=statRows.map(statBox).join('');
   $('todayDashboardTodoCount').textContent=`${todos.length} mục`;
   $('todayDashboardScheduleCount').textContent=`${schedules.length} lịch`;
-  $('todayDashboardTodos').innerHTML=todoRows||'<div class="empty">Hôm nay chưa có việc cần ưu tiên.</div>';
+  $('todayDashboardTodos').innerHTML=todoRows||'<div class="empty">Hôm nay chưa có việc.</div>';
   $('todayDashboardSchedule').innerHTML=scheduleRows||'<div class="empty">Hôm nay chưa có lịch trình.</div>';
   $('todayDashboardTodos').insertAdjacentHTML('beforeend',more(todos.length));
   $('todayDashboardSchedule').insertAdjacentHTML('beforeend',more(schedules.length));
@@ -2157,16 +2163,17 @@ function renderHome(){
       const rt=$('realtimeComfortText'); if(rt){rt.textContent=restoredText; if(rt.parentElement)rt.parentElement.style.display='block';}
       const oldComfort=$('comfort'); if(oldComfort){oldComfort.textContent=restoredText;oldComfort.style.display='block';}
     }
-    const d=todayISO(), ownerId=accountOwnerId(), mins=ownerId?studyMinutesForDate(ownerId,d):0;
+    const d=todayISO(), ownerId=accountOwnerId(), scoped=ownerId?getOwnerScopedData(ownerId):{todos:state.todos||[],schedules:state.schedules||[],habits:state.habits||{}};
+    const mins=ownerId?studyMinutesForDate(ownerId,d):0;
     const goalMin=state.goals.day||120;
     const studyPct=Math.min(100, Math.round(mins/goalMin*100));
     
-    const todosToday=state.todos.filter(x=>x.date===d);
+    const todosToday=(scoped.todos||[]).filter(x=>(!x.ownerId||String(x.ownerId)===String(ownerId))&&x.date===d);
     const doneTodos=todosToday.filter(x=>x.done).length;
     const todoPct=todosToday.length?Math.round(doneTodos/todosToday.length*100):0;
     
     const currentYM=ymISO();
-    const habitList=state.habits[currentYM]||[];
+    const habitList=(scoped.habits?.[currentYM]||[]).filter(h=>!h.ownerId||String(h.ownerId)===String(ownerId));
     const totalHabitTarget=habitList.reduce((s,h)=>s+h.target,0);
     const totalHabitDone=habitList.reduce((s,h)=>s+Object.values(h.days).filter(Boolean).length,0);
     const habitPct=totalHabitTarget?Math.min(100,Math.round(totalHabitDone/totalHabitTarget*100)):0;
@@ -2197,8 +2204,10 @@ function renderHome(){
         ['🌱', state.activities, 'Hoạt động đã làm']
     ].map(x=>`<div class="stat"><b>${x[0]} ${x[1]}</b><span>${x[2]}</span></div>`).join('');
     
-    $('todayTodos').innerHTML=todosToday.map(x=>`<div class="todo ${x.done?'done':''}"><div class="title">${esc(x.title)}</div><span>${x.done?'☑️':'⬜'}</span></div>`).join('')||'<div class="empty">Hôm nay chưa có việc.</div>';
-    $('todaySchedule').innerHTML=state.schedules.filter(x=>x.date===d).sort((a,b)=>(a.time||'').localeCompare(b.time||'')).map(x=>`<div class="todo"><b>${x.time||'—'}</b><div class="title">${esc(x.title)}</div></div>`).join('')||'<div class="empty">Chưa có lịch.</div>';
+    const legacyTodos=$('todayTodos');
+    if(legacyTodos) legacyTodos.innerHTML=todosToday.map(x=>`<div class="todo ${x.done?'done':''}"><div class="title">${esc(x.title)}</div><span>${x.done?'☑️':'⬜'}</span></div>`).join('')||'<div class="empty">Hôm nay chưa có việc.</div>';
+    const legacySchedule=$('todaySchedule');
+    if(legacySchedule) legacySchedule.innerHTML=(scoped.schedules||[]).filter(x=>(!x.ownerId||String(x.ownerId)===String(ownerId))&&x.date===d).sort((a,b)=>(a.time||'').localeCompare(b.time||'')).map(x=>`<div class="todo"><b>${x.time||'—'}</b><div class="title">${esc(x.title)}</div></div>`).join('')||'<div class="empty">Chưa có lịch.</div>';
     
     const mo=state.moods.find(x=>x.date===d);
     $('homeMood').innerHTML=mo?`${mo.emoji} ${esc(mo.name)}<br><span class="muted">${esc(mo.note||'')}</span>`:'Chưa ghi cảm xúc hôm nay.';
@@ -2485,7 +2494,7 @@ if($('habitMonth')) $('habitMonth').onchange=e=>{currentHabitMonth=e.target.valu
 if($('prevMonth')) $('prevMonth').onclick=()=>{let [y,m]=currentHabitMonth.split('-').map(Number);m--;if(m<1){m=12;y--}currentHabitMonth=`${y}-${String(m).padStart(2,'0')}`;$('habitMonth').value=currentHabitMonth;renderHabits()};
 if($('nextMonth')) $('nextMonth').onclick=()=>{let [y,m]=currentHabitMonth.split('-').map(Number);m++;if(m>12){m=1;y++}currentHabitMonth=`${y}-${String(m).padStart(2,'0')}`;$('habitMonth').value=currentHabitMonth;renderHabits()};
 if($('addHabit')) $('addHabit').onclick=()=>{const n=$('habitName').value.trim();if(!n)return alert('Nhập tên thói quen nha 🐝🍀');const ownerId=accountOwnerId();
-    const target=+$('habitTarget').value||20; ensureHabits(currentHabitMonth).push({id:uid(),ownerId,name:n,target,days:{},createdAt:new Date().toISOString()}); updateAccountProgress('habit_created',0,ownerId,target); $('habitName').value=''; checkAchievements(); save()};
+    const target=+$('habitTarget').value||20; const now=new Date().toISOString(); ensureHabits(currentHabitMonth).push({id:uid(),ownerId,name:n,target,days:{},createdAt:now,updatedAt:now}); updateAccountProgress('habit_created',0,ownerId,target); $('habitName').value=''; checkAchievements(); save({immediateCloud:true})};
 
 if($('reviewHabit')) $('reviewHabit').onclick=()=>{
     const ym=currentHabitMonth;
@@ -2529,7 +2538,7 @@ function toggleHabit(id,day){
     const nextDone=!Boolean(h.days[day]);
 
     // Optimistic update: đổi trạng thái ngay, không chờ renderAll hoặc Supabase.
-    h.days[day]=nextDone;
+    h.days[day]=nextDone; h.updatedAt=new Date().toISOString();
     if(h.ownerId) updateAccountProgress('habit_done',0,h.ownerId,nextDone?1:-1);
     const ownerId=h.ownerId||accountOwnerId();
     if(nextDone) awardDailyHabitMilestone(ownerId,currentHabitMonth,day);
@@ -2542,12 +2551,12 @@ function toggleHabit(id,day){
 
     // Lưu local/cloud không chặn phản hồi của ô tick.
     persistActiveUserData();
-    save({render:false});
+    save({render:false,immediateCloud:true});
 }
 function renderHabitQuickSummary(){
     const summary=$('habitQuickSummary'),list=$('habitQuickList');
     if(!summary||!list)return;
-    const ym=currentHabitMonth,days=daysInMonth(ym),habits=ensureHabits(ym);
+    const ym=currentHabitMonth,days=daysInMonth(ym),ownerId=accountOwnerId(),habits=ensureHabits(ym).filter(h=>!h.ownerId||String(h.ownerId)===String(ownerId));
     if(!habits.length){
         summary.innerHTML='<div class="empty">Chưa có thói quen để tổng hợp.</div>';
         list.innerHTML='';
@@ -2598,7 +2607,7 @@ function renderHabitQuickSummary(){
 }
 
 function renderHabits(){
-    const ym=currentHabitMonth,days=daysInMonth(ym),a=ensureHabits(ym);
+    const ym=currentHabitMonth,days=daysInMonth(ym),ownerId=accountOwnerId(),a=ensureHabits(ym).filter(h=>!h.ownerId||String(h.ownerId)===String(ownerId));
     renderHabitQuickSummary();
     $('habitGrid').innerHTML=`<div class="habitrow" style="background:var(--pink);font-weight:700"><div class="name">Thói quen</div>${Array.from({length:days},(_,i)=>`<div>${i+1}</div>`).join('')}<div>%</div></div>`+a.map(h=>{const done=Array.from({length:days},(_,i)=>h.days[i+1]).filter(Boolean).length,p=Math.round(done/days*100);return `<div class="habitrow"><div class="name"><b>${esc(h.name)}</b><br><span class="muted">Mục tiêu ${h.target} ngày • ${done}/${days}</span></div>${Array.from({length:days},(_,i)=>`<div><div class="check ${h.days[i+1]?'on':''}" onclick="toggleHabit('${h.id}',${i+1})">${h.days[i+1]?'✓':''}</div></div>`).join('')}<div><b>${p}%</b><br><button class="btn light sm" onclick="editHabit('${h.id}')">Sửa</button><button class="btn danger sm" onclick="deleteHabit('${h.id}')">Xóa</button></div></div>`}).join('')||'<div class="empty">Tháng này chưa có thói quen.</div>';
     const stats=a.map(h=>{const done=Object.values(h.days).filter(Boolean).length;return {h,done,p:Math.round(done/days*100)}});
@@ -2607,7 +2616,7 @@ function renderHabits(){
 }
 
 function editHabit(id){const h=ensureHabits(currentHabitMonth).find(x=>x.id===id);if(!h)return;showModal('✏️ Sửa thói quen',`<div class="form"><div class="full"><label>Tên thói quen</label><input id="mhName" value="${esc(h.name)}"></div><div><label>Mục tiêu tháng</label><input id="mhTarget" type="number" value="${h.target}"></div></div><button class="btn" style="margin-top:10px" onclick="editHabitSubmit('${id}')">Lưu</button>`);}
-function editHabitSubmit(id){const h=ensureHabits(currentHabitMonth).find(x=>x.id===id);if(!h)return;h.name=$('mhName').value.trim()||h.name;h.target=+$('mhTarget').value||20;save();closeModal()}
+function editHabitSubmit(id){const h=ensureHabits(currentHabitMonth).find(x=>x.id===id);if(!h)return;h.name=$('mhName').value.trim()||h.name;h.target=+$('mhTarget').value||20;h.updatedAt=new Date().toISOString();save({immediateCloud:true});closeModal()}
 function deleteHabit(id){
   const arr=ensureHabits(currentHabitMonth);const i=arr.findIndex(x=>x.id===id);if(i<0)return;
   const removed=arr[i],ownerId=removed?.ownerId||accountOwnerId();
@@ -3811,8 +3820,9 @@ function applyPerfPagination(){
 }
 function renderCurrentTab(){
   if(state.sessionAuth && state.sessionAuth.role!=='Guest'){ensureUserStore();const id=accountOwnerId();if(id&&state.userData.accounts[id]){/* active bucket is already loaded */}}
-  checkAchievements();
   checkAuthSession();
+  try{const ownerId=accountOwnerId();if(ownerId)recalculateCurrentProgress(ownerId,{persist:false});}catch(e){console.warn('Không thể tái tính dữ liệu hiển thị',e);}
+  checkAchievements();
   updateFounderStudyVisibility();
   try{renderPrivateXPHistoryAdmin();}catch(e){}
   try{renderProfileView();}catch(e){}
@@ -3893,6 +3903,7 @@ window.onload = async () => {
     if(state.sessionAuth && state.sessionAuth.role!=='Guest')switchUserData(state.sessionAuth);
     hydrateStartupInputs();
     activateStartupView();
+    try{const ownerId=accountOwnerId();if(ownerId)recalculateCurrentProgress(ownerId,{persist:false});}catch(e){console.warn('Không thể khôi phục tiến độ local',e);}
     renderAll();
     updateMenu();
 
@@ -3904,6 +3915,7 @@ window.onload = async () => {
       normalizeStateAccounts();
       if(state.sessionAuth && state.sessionAuth.role!=='Guest')switchUserData(state.sessionAuth);
       hydrateStartupInputs();
+      try{const ownerId=accountOwnerId();if(ownerId)recalculateCurrentProgress(ownerId,{persist:false});}catch(e){console.warn('Không thể tái tính sau đồng bộ cloud',e);}
       renderAll();
       updateMenu();
     }
@@ -4171,13 +4183,15 @@ if(typeof old==='function'){
     const la=local&&local.accounts&&typeof local.accounts==='object'?local.accounts:{};
     const ra=remote&&remote.accounts&&typeof remote.accounts==='object'?remote.accounts:{};
     const accounts=Object.assign({},ra);
-    Object.entries(la).forEach(([id,bucket])=>{
-      const old=accounts[id];
-      if(!old||Number(bucket?._lastSavedAt||0)>=Number(old?._lastSavedAt||0))accounts[id]=bucket;
-    });
-    const out=Object.assign({},remote||{},local&&local._initialized?{_initialized:local._initialized}:{});
-    out.accounts=accounts;
-    return out;
+    const listKeys=['todos','schedules','sessions','journals','moods','moments','adminStudyTimes','privateXPHistory','questClaims'];
+    const stampOf=value=>{const raw=value?.updatedAt||value?.modifiedAt||value?.completedAt||value?.createdAt||'';const stamp=Date.parse(raw);return Number.isFinite(stamp)?stamp:0;};
+    const keyOf=(value,index)=>String(value?.id??value?.key??value?.date??`${typeof value}:${value}:${index}`);
+    const mergeList=(localValue,remoteValue,deletedIds)=>{const map=new Map();[...(Array.isArray(remoteValue)?remoteValue:[]),...(Array.isArray(localValue)?localValue:[])].forEach((value,index)=>{if(value===undefined||value===null)return;const key=keyOf(value,index),old=map.get(key);if(!old||stampOf(value)>=stampOf(old))map.set(key,clone(value));});return [...map.values()].filter(value=>!deletedIds.has(String(value?.id??value?.key??'')));};
+    const mergeHabitMaps=(localValue,remoteValue,deletedIds)=>{const out={},months=new Set([...Object.keys(remoteValue||{}),...Object.keys(localValue||{})]);months.forEach(month=>{out[month]=mergeList(localValue?.[month],remoteValue?.[month],deletedIds);});return out;};
+    const trashIds=bucket=>new Set(Object.values(bucket?.trash||{}).flatMap(rows=>Array.isArray(rows)?rows:[]).map(item=>String(item?.id??item?.key??'')).filter(Boolean));
+    const mergeBucket=(bucket,old)=>{const localStamp=Number(bucket?._lastSavedAt||0),remoteStamp=Number(old?._lastSavedAt||0),merged=localStamp>=remoteStamp?{...old,...bucket}:{...bucket,...old},deletedIds=new Set([...trashIds(bucket),...trashIds(old)]);listKeys.forEach(key=>{merged[key]=mergeList(bucket?.[key],old?.[key],deletedIds);});merged.habits=mergeHabitMaps(bucket?.habits,old?.habits,deletedIds);if(localStamp||remoteStamp)merged._lastSavedAt=Math.max(localStamp,remoteStamp);return merged;};
+    Object.entries(la).forEach(([id,bucket])=>{const old=accounts[id];accounts[id]=old?mergeBucket(bucket,old):clone(bucket);});
+    const out=Object.assign({},remote||{},local&&local._initialized?{_initialized:local._initialized}:{});out.accounts=accounts;return out;
   }
   function mergeInitial(remoteState,localState,remoteExternal,localExternal){
     const remote=clone(remoteState)||{};const local=clone(localState)||{};const out=Object.assign({},remote);
@@ -4421,6 +4435,26 @@ if(typeof old==='function'){
   window.openTodoV21=function(id){const t=(state.todos||[]).find(x=>String(x.id)===String(id));if(!t)return;window.openHistoryV21Modal(`📋 Kế hoạch · ${dateLabelV21(t.date)}`,`<div class="history-v21-fields">${fieldV21('Công việc',t.title)}${fieldV21('Mức ưu tiên',t.priority||'thấp',false)}${fieldV21('Thời gian',t.time||'Chưa đặt',false)}${fieldV21('Trạng thái',t.done?'Đã hoàn thành':'Chưa hoàn thành',false)}${fieldV21('Ghi chú',t.note||'')}</div>`,'todos',t.id);};
   window.renderTodos=function(){const date=$('todoDate')?.value||todayISO(),q=($('todoSearch')?.value||'').toLowerCase(),a=(state.todos||[]).filter(x=>x.date===date&&(x.title+' '+(x.note||'')).toLowerCase().includes(q)),el=$('todoList');if(!el)return;el.innerHTML=a.length?a.map(x=>`<div class="todo ${x.done?'done':''}"><div class="title"><button type="button" class="history-v21-summary" style="padding:0;display:block" onclick="window.openTodoV21('${escAttrV21(x.id)}')"><b>${escV21(x.title)}</b><div class="kpi">${x.time?escV21(x.time)+' • ':''}${escV21(x.note||'Nhấn để xem chi tiết')}</div></button></div><span class="tag ${x.priority==='cao'?'red':x.priority==='trung'?'yellow':''}">${x.priority==='cao'?'Cao':x.priority==='trung'?'Trung bình':'Thấp'}</span><input type="checkbox" ${x.done?'checked':''} onchange="toggleTodoDone('${escAttrV21(x.id)}', this.checked)" style="width:20px;height:20px;cursor:pointer"><button class="btn light sm" onclick="editTodo('${escAttrV21(x.id)}')">Sửa</button><button class="btn danger sm" onclick="del('todos','${escAttrV21(x.id)}')">Xóa</button></div>`).join(''):`<div class="empty">Chưa có việc cho ngày ${escV21(date)}.</div>`;};
   if($('todoSearch'))$('todoSearch').oninput=window.renderTodos;
+  const groupTodoHistoryV21=(rows,renderer)=>{
+    if(!rows.length)return '<div class="empty">Chưa có kế hoạch cũ.</div>';
+    const years={};
+    rows.forEach(row=>{
+      const match=String(row.date||'').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+      const year=match?match[1]:'Không rõ',month=match?match[2]:'00',day=match?match[3]:String(row.date||'Không rõ');
+      years[year]??={};years[year][month]??={};years[year][month][day]??=[];years[year][month][day].push(row);
+    });
+    const countDays=days=>Object.values(days).reduce((sum,list)=>sum+list.length,0);
+    return Object.keys(years).sort((a,b)=>b.localeCompare(a)).map((year,yi)=>{
+      const months=years[year],yearCount=Object.values(months).reduce((sum,days)=>sum+countDays(days),0);
+      const monthHtml=Object.keys(months).sort((a,b)=>Number(b)-Number(a)).map((month,mi)=>{
+        const days=months[month],monthLabel=month==='00'?'Chưa xác định':`Tháng ${Number(month)}`;
+        const dayHtml=Object.keys(days).sort((a,b)=>b.localeCompare(a)).map((day,di)=>`<details class="history-time-day" ${yi===0&&mi===0&&di===0?'open':''}><summary>📌 ${month==='00'?'Ngày chưa xác định':`Ngày ${Number(day)}`} <span class="tag">${days[day].length}</span></summary><div class="history-v21-list history-time-day-body">${days[day].map(renderer).join('')}</div></details>`).join('');
+        return `<details class="history-time-month" ${yi===0&&mi===0?'open':''}><summary>📅 ${monthLabel} <span class="tag">${countDays(days)} mục</span></summary><div class="history-time-month-body">${dayHtml}</div></details>`;
+      }).join('');
+      return `<details class="history-time-year" ${yi===0?'open':''}><summary>🗓️ Năm ${escV21(year)} <span class="tag">${yearCount} mục</span></summary><div class="history-time-year-body">${monthHtml}</div></details>`;
+    }).join('');
+  };
+  window.renderTodos=function(){const date=$('todoDate')?.value||todayISO(),q=($('todoSearch')?.value||'').toLowerCase(),ownerId=accountOwnerId(),rows=(state.todos||[]).filter(x=>(!x.ownerId||String(x.ownerId)===String(ownerId))&&(x.title+' '+(x.note||'')).toLowerCase().includes(q)),todayRows=rows.filter(x=>x.date===date),oldRows=rows.filter(x=>x.date!==date),el=$('todoList');if(!el)return;const item=x=>`<div class="todo ${x.done?'done':''}"><div class="title"><button type="button" class="history-v21-summary" style="padding:0;display:block" onclick="window.openTodoV21('${escAttrV21(x.id)}')"><b>${escV21(x.title)}</b><div class="kpi">${x.time?escV21(x.time)+' • ':''}${escV21(x.note||'Nhấn để xem chi tiết')}</div></button></div><span class="tag ${x.priority==='cao'?'red':x.priority==='trung'?'yellow':''}">${x.priority==='cao'?'Cao':x.priority==='trung'?'Trung bình':'Thấp'}</span><input type="checkbox" ${x.done?'checked':''} onchange="toggleTodoDone('${escAttrV21(x.id)}', this.checked)" style="width:20px;height:20px;cursor:pointer"><button class="btn light sm" onclick="editTodo('${escAttrV21(x.id)}')">Sửa</button><button class="btn danger sm" onclick="del('todos','${escAttrV21(x.id)}')">Xóa</button></div>`;el.innerHTML=`<section class="todo-today-focus"><div class="history-time-section-title">📝 Việc hôm nay · ${escV21(date)}</div>${todayRows.length?todayRows.map(item).join(''):'<div class="empty">Hôm nay chưa có kế hoạch. Bạn có thể thêm việc mới ở biểu mẫu phía trên.</div>'}</section><section class="todo-history-section"><div class="history-time-section-title">🗂️ Kế hoạch đã lưu</div>${groupTodoHistoryV21(oldRows,item)}</section>`;};
   const oldSaveMood=window.__studyEmpireSaveMoodV21Bound;
   if(!oldSaveMood && $('saveMood')){window.__studyEmpireSaveMoodV21Bound=true;$('saveMood').onclick=()=>{const note=$('moodNote')?.value.trim()||'';const def=getAllMoods().find(m=>m[1]===activeMood)||['😔','Buồn'];const idx=state.moods.findIndex(m=>m.date===todayISO());const entry={date:todayISO(),name:activeMood,emoji:def[0],note};if(idx>=0)state.moods[idx]=entry;else state.moods.unshift(entry);recordActivity('journal',10);save();renderMoods();alert('Đã lưu cảm xúc hôm nay! 🐝');};}
   try{window.renderEndDay();window.renderMoods();window.renderJournals();window.renderMoments();window.renderTodos();}catch(e){console.warn('History UI V21',e);}
