@@ -4138,6 +4138,31 @@ if(typeof old==='function'){
   let lastSyncedExternal=null;
   let lastCloudEnvelope=null;
 
+  /* Bổ sung metadata cho bản ghi cũ mà không thay đổi nội dung hay xóa dữ liệu.
+     createdAt/updatedAt giúp merge theo từng bản ghi ổn định hơn sau reload. */
+  function normalizeUserDataTimestamps(){
+    const now=new Date().toISOString();
+    let changed=false;
+    const normalizeRows=(rows,fallback)=>{
+      if(!Array.isArray(rows))return;
+      rows.forEach(row=>{
+        if(!row||typeof row!=='object')return;
+        const created=row.createdAt||row.updatedAt||fallback;
+        if(!row.createdAt){row.createdAt=created;changed=true;}
+        if(!row.updatedAt){row.updatedAt=row.createdAt||fallback;changed=true;}
+      });
+    };
+    normalizeRows(state.todos,now);
+    Object.values(state.habits||{}).forEach(rows=>normalizeRows(rows,now));
+    Object.values(state.userData?.accounts||{}).forEach(bucket=>{
+      const savedAt=Number(bucket?._lastSavedAt||0);
+      const fallback=savedAt>0?new Date(savedAt).toISOString():now;
+      normalizeRows(bucket?.todos,fallback);
+      Object.values(bucket?.habits||{}).forEach(rows=>normalizeRows(rows,fallback));
+    });
+    return changed;
+  }
+
   function headers(extra){return Object.assign({apikey:CFG.key,Authorization:'Bearer '+CFG.key,'Content-Type':'application/json',Accept:'application/json'},extra||{})}
   function endpoint(){return CFG.url+CFG.rest+'/'+CFG.table}
   function stripSession(value){const copy=clone(value)||{};delete copy.sessionAuth;delete copy[META];return copy}
@@ -4161,6 +4186,7 @@ if(typeof old==='function'){
     finally{window.__studyEmpireCloudApplying=false}
   }
   function makeSnapshot(){
+    normalizeUserDataTimestamps();
     const current=stripSession(state);
     const external=externalStores();
     seq+=1;localStorage.setItem(SEQ_KEY,String(seq));
@@ -4263,7 +4289,9 @@ if(typeof old==='function'){
         const remote=unwrap(payload);lastCloudEnvelope=payload;lastSyncedState=clone(remote.state);lastSyncedExternal=clone(remote.external);
         const merged=mergeInitial(remote.state,localState,remote.external,localExternal);
         applyState(merged.state);applyExternalStores(merged.external);
-        const needsPush=stable(merged.state)!==stable(remote.state)||stable(merged.external)!==stable(remote.external);
+        const repaired=normalizeUserDataTimestamps();
+        if(repaired)saveStateWithoutSession();
+        const needsPush=stable(state)!==stable(remote.state)||stable(merged.external)!==stable(remote.external);
         if(needsPush)pending=makeSnapshot();
         console.log('☁️ Supabase V2: đã tải toàn bộ state trước khi render.');
         if(needsPush)flush();
@@ -6359,7 +6387,7 @@ if(typeof old==='function'){
     const yearKeys=Object.keys(years).sort((a,b)=>b.localeCompare(a));
     return yearKeys.map((year,yi)=>{
       const months=years[year],monthKeys=Object.keys(months).sort((a,b)=>Number(b)-Number(a));
-      return `<details class="history-time-year" ${yi===0?'open':''}><summary>🗓️ Năm ${esc24(year)} <span class="tag">${Object.values(months).reduce((n,m)=>n+Object.values(m).reduce((a,d)=>a+Object.values(d).reduce((x,v)=>x+v.length,0),0),0)} mục</span></summary><div class="history-time-year-body">${monthKeys.map((month,mi)=>{const days=months[month],dayKeys=Object.keys(days).sort((a,b)=>String(b).localeCompare(String(a)));const monthLabel=month==='00'?'Chưa xác định':`Tháng ${Number(month)}`;return `<details class="history-time-month" ${yi===0&&mi===0?'open':''}><summary>📅 ${monthLabel} <span class="tag">${Object.values(days).reduce((n,v)=>n+v.length,0)} mục</span></summary><div class="history-time-month-body">${dayKeys.map((day,di)=>`<details class="history-time-day" ${yi===0&&mi===0&&di===0?'open':''}><summary>📌 ${month==='00'?'Ngày chưa xác định':`Ngày ${Number(day)}`} <span class="tag">${days[day].length}</span></summary><div class="history-v21-list history-time-day-body">${days[day].map(itemRenderer).join('')}</div></details>`).join('')}</div></details>`;}).join('')}</div></details>`;
+      return `<details class="history-time-year" ${yi===0?'open':''}><summary>🗓️ Năm ${esc24(year)} <span class="tag">${monthKeys.reduce((n,month)=>n+Object.values(months[month]).reduce((a,rows)=>a+rows.length,0),0)} mục</span></summary><div class="history-time-year-body">${monthKeys.map((month,mi)=>{const days=months[month],dayKeys=Object.keys(days).sort((a,b)=>String(b).localeCompare(String(a)));const monthLabel=month==='00'?'Chưa xác định':`Tháng ${Number(month)}`;return `<details class="history-time-month" ${yi===0&&mi===0?'open':''}><summary>📅 ${monthLabel} <span class="tag">${Object.values(days).reduce((n,v)=>n+v.length,0)} mục</span></summary><div class="history-time-month-body">${dayKeys.map((day,di)=>`<details class="history-time-day" ${yi===0&&mi===0&&di===0?'open':''}><summary>📌 ${month==='00'?'Ngày chưa xác định':`Ngày ${Number(day)}`} <span class="tag">${days[day].length}</span></summary><div class="history-v21-list history-time-day-body">${days[day].map(itemRenderer).join('')}</div></details>`).join('')}</div></details>`;}).join('')}</div></details>`;
     }).join('');
   };
   const shell24=(kind,icon,row,preview,fields,actions)=>`<article class="history-v21-item" data-history-kind="${attr24(kind)}"><button type="button" class="history-v21-summary" aria-expanded="false" onclick="window.toggleHistoryV21(this)"><span class="history-v21-date"><span class="history-v21-date-icon">${icon}</span><span><span class="history-v21-date-main">${esc24(dateLabel24(row.date))}</span><span class="history-v21-date-sub">${esc24(row.date||'')}</span><span class="history-v21-preview">${esc24(preview||'')}</span></span></span><span class="history-v21-chevron">⌄</span></button><div class="history-v21-detail"><div class="history-v21-fields">${fields}</div><div class="history-v21-actions">${actions||''}</div></div></article>`;
