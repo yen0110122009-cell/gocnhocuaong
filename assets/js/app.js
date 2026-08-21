@@ -2450,19 +2450,6 @@ function addCustomQuestAdmin(){
     alert('Đã thêm nhiệm vụ nhận XP thành công! 🐝🍀');
 }
 
-function claimCustomQuest(id){
-    const q = (state.customQuests || []).find(x=>x.id===id);
-    const ownerId=accountOwnerId();
-    if(!q || !ownerId) return;
-    state.questClaims=Array.isArray(state.questClaims)?state.questClaims:[];
-    if(state.questClaims.some(c=>String(c.ownerId)===String(ownerId)&&c.questId===id)){ alert('⚠️ Nhiệm vụ này đã được nhận XP.'); return; }
-    state.questClaims.push({id:uid(),questId:id,ownerId,xp:Math.max(0,Number(q.xp)||0),claimedAt:new Date().toISOString()});
-    recalculateCurrentProgress(ownerId);
-    checkAchievements();
-    save(); renderAchievementsView(); renderComparison();
-    alert(`Đã nhận +${q.xp} XP từ nhiệm vụ "${q.title}"! 🐝🍀`);
-}
-
 function deleteCustomQuest(id){
     const role=state.sessionAuth?.role||'Guest';
     if(!['Admin','Founder'].includes(role)) return alert('⚠️ Chỉ Admin/Founder mới có quyền xóa nhiệm vụ!');
