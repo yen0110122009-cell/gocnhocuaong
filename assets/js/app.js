@@ -574,6 +574,36 @@ function resetProgressForNewMember(){
     try{finalRefreshLevelPanels();}catch(e){}state.level=0;state.streak=0;state.bestStreak=0;state.activities=0;state.bestTasks=0;state.bestXPDay=0;state.todayXP=0;state.todayActivities=0;state.lastActivityDate='';state.unlockedAchievements=[];state.activityDates=[];
 }
 
+const UI_ICON_PATHS={
+  home:'<path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1Z"/><path d="M9 21v-6h6v6"/>',
+  moon:'<path d="M20.5 14.3A8.5 8.5 0 0 1 9.7 3.5 8.5 8.5 0 1 0 20.5 14.3Z"/>',
+  todo:'<rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/>',
+  study:'<circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/>',
+  trophy:'<path d="M8 4h8v4a4 4 0 0 1-8 0Z"/><path d="M8 6H5v2a3 3 0 0 0 3 3M16 6h3v2a3 3 0 0 1-3 3M12 12v4M8 20h8M10 16h4"/>',
+  leaf:'<path d="M20 4C12 4 6 7 6 14c0 3 2 5 5 5 7 0 9-6 9-15Z"/><path d="M4 20c4-5 8-8 14-11"/>',
+  heart:'<path d="M20.8 8.7c0 5.2-8.8 10.3-8.8 10.3S3.2 13.9 3.2 8.7A4.7 4.7 0 0 1 12 6.4a4.7 4.7 0 0 1 8.8 2.3Z"/>',
+  calendar:'<rect x="3" y="4" width="18" height="17" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>',
+  camera:'<path d="M4 7h3l2-3h6l2 3h3a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2Z"/><circle cx="12" cy="13" r="3.5"/>',
+  image:'<rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="8.5" cy="9" r="1.5"/><path d="m3 17 5-5 4 4 3-3 6 6"/>',
+  book:'<path d="M4 5a2 2 0 0 1 2-2h6v17H6a2 2 0 0 0-2 2Z"/><path d="M20 5a2 2 0 0 0-2-2h-6v17h6a2 2 0 0 1 2 2Z"/>',
+  chart:'<path d="M4 19V5M4 19h17"/><path d="m7 15 3-4 3 2 5-6"/>',
+  bot:'<rect x="4" y="7" width="16" height="13" rx="3"/><path d="M12 3v4M8 12h.01M16 12h.01M8 16h8"/>',
+  trash:'<path d="M4 7h16M10 11v6M14 11v6M6 7l1 14h10l1-14M9 7V4h6v3"/>',
+  user:'<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>',
+  shield:'<path d="M12 3 20 6v6c0 5-3.5 8.5-8 10-4.5-1.5-8-5-8-10V6Z"/><path d="m9 12 2 2 4-4"/>',
+  crown:'<path d="m3 7 4 4 5-7 5 7 4-4-2 13H5Z"/><path d="M5 17h14"/>',
+};
+function uiIcon(name,label=''){
+  const path=UI_ICON_PATHS[name]||UI_ICON_PATHS.todo;
+  return `<svg class="ui-icon" viewBox="0 0 24 24" role="img" aria-label="${esc(label)}" focusable="false">${path}</svg>`;
+}
+function moodIconKey(name=''){
+  const map={
+    'Vui':'heart','Bình yên':'moon','Buồn':'moon','Đau lòng':'heart','Lo lắng':'study','Tức giận':'shield','Mệt mỏi':'study','Cô đơn':'leaf','Hy vọng':'leaf','Hứng khởi':'study','Tập trung':'chart','Biết ơn':'heart','Yêu đời':'heart','Phát khóc':'heart','Phấn chấn':'trophy','Thư giãn':'moon','Chán nản':'moon','Tự hào':'crown','Xấu hổ':'user','Bất an':'shield','Ngạc nhiên':'chart','Bực bội':'shield','Chạnh lòng':'heart','Mất mát':'heart','Có động lực':'trophy','Yêu bản thân':'heart'
+  };
+  return map[name]||'heart';
+}
+
 function setupNavAndAdminRole(){
   const role = state.sessionAuth ? state.sessionAuth.role : 'Guest';
   document.body.dataset.role = role;
@@ -581,12 +611,12 @@ function setupNavAndAdminRole(){
   /* KHÁCH VẪN ĐƯỢC XEM VÀ ĐI QUA TOÀN BỘ CÁC TRANG.
      Chỉ các thao tác làm thay đổi dữ liệu mới bị khóa. */
   let baseNav = [
-      ['home','🏠 Tổng quan'],['endday','🌙 Kết ngày'],['todo','📋 Kế hoạch'],['study','⏱️ Học tập'],
-      ['achievements','🏆 Thành tích'],['habit','🍀 Thói quen'],['mood','💗 Cảm xúc'],
-      ['schedule','🗓️ Lịch'],['moments','📸 Khoảnh khắc'],['journey','🖼️ Hành trình'],['journal','📖 Nhật ký'],['summary','📊 Tổng kết'],['compare','🏆 Bảng xếp hạng'],['data','🤖 Dữ liệu'],['trash','🗑️ Thùng rác'],['profile','👤 Profile']
+      ['home','home','Tổng quan'],['endday','moon','Kết ngày'],['todo','todo','Kế hoạch'],['study','study','Học tập'],
+      ['achievements','trophy','Thành tích'],['habit','leaf','Thói quen'],['mood','heart','Cảm xúc'],
+      ['schedule','calendar','Lịch'],['moments','camera','Khoảnh khắc'],['journey','image','Hành trình'],['journal','book','Nhật ký'],['summary','chart','Tổng kết'],['compare','trophy','Bảng xếp hạng'],['data','bot','Dữ liệu'],['trash','trash','Thùng rác'],['profile','user','Profile']
     ];
-  if(['Admin','Founder'].includes(role)) baseNav.splice(1,0,['admin',role==='Founder'?'🛡️ Quản trị':'👑 Quản trị']);
-  $('nav').innerHTML=baseNav.map(([id,t])=>`<button type="button" class="navbtn" data-go="${id}">${t}</button>`).join('');
+  if(['Admin','Founder'].includes(role)) baseNav.splice(1,0,['admin',role==='Founder'?'shield':'crown','Quản trị']);
+  $('nav').innerHTML=baseNav.map(([id,icon,label])=>`<button type="button" class="navbtn" data-go="${id}">${uiIcon(icon,label)}<span>${esc(label)}</span></button>`).join('');
   const adminControls=$('adminAchievementControls'); if(adminControls) adminControls.style.display=(['Admin','Founder'].includes(role))?'grid':'none';
   const aiThemeCommandBox=$('aiThemeCommandBox'); if(aiThemeCommandBox) aiThemeCommandBox.style.display=(['Admin','Founder'].includes(role))?'block':'none';
   document.querySelectorAll('.admin-only-command').forEach(el=>el.style.display=(['Admin','Founder'].includes(role))?'':'none');
@@ -2137,7 +2167,7 @@ function renderTodayDashboard(){
   const statBox=(row)=>`<div class="today-dashboard-stat"><strong>${esc(row.value)}</strong><span>${esc(row.label)}</span>${row.progress===null?'':`<div class="progress" aria-label="${esc(row.label)}"><i style="width:${row.progress}%"></i></div>`}</div>`;
   const todoLabel=(x)=>x.done?'Đã xong':(x.priority==='cao'?'Ưu tiên cao':x.priority==='trung'?'Ưu tiên trung bình':'Chưa hoàn thành');
   const todoRows=orderedTodos.map(x=>`<label class="today-dashboard-item ${x.done?'done':''}" for="today-todo-${esc(x.id)}"><input class="today-dashboard-todo-check" id="today-todo-${esc(x.id)}" type="checkbox" ${x.done?'checked':''} onchange="toggleTodoDone('${esc(x.id)}', this.checked)" aria-label="Đánh dấu ${esc(x.title||'Việc chưa đặt tên')} hoàn thành"><span class="today-dashboard-item-marker" aria-hidden="true">${x.done?'✓':'○'}</span><span class="today-dashboard-item-main"><span class="today-dashboard-item-title">${esc(x.title||'Việc chưa đặt tên')}</span><span class="today-dashboard-item-meta">${esc([x.time,todoLabel(x)].filter(Boolean).join(' • '))}</span></span></label>`).join('');
-  const scheduleRows=orderedSchedules.slice(0,5).map(x=>`<div class="today-dashboard-item"><span class="today-dashboard-item-marker">🕒</span><div class="today-dashboard-item-main"><div class="today-dashboard-item-title">${esc(x.title||'Lịch chưa đặt tên')}</div><div class="today-dashboard-item-meta">${esc(x.time||'Cả ngày')}${x.note?` • ${esc(x.note)}`:''}</div></div></div>`).join('');
+  const scheduleRows=orderedSchedules.slice(0,5).map(x=>`<div class="today-dashboard-item"><span class="today-dashboard-item-marker">${uiIcon('calendar','Lịch')}</span><div class="today-dashboard-item-main"><div class="today-dashboard-item-title">${esc(x.title||'Lịch chưa đặt tên')}</div><div class="today-dashboard-item-meta">${esc(x.time||'Cả ngày')}${x.note?` • ${esc(x.note)}`:''}</div></div></div>`).join('');
   const more=(count)=>count>5?`<div class="today-dashboard-more">Còn ${count-5} lịch trong dữ liệu hôm nay.</div>`:'';
   const formatDate=new Date(d+'T12:00:00').toLocaleDateString('vi-VN',{weekday:'long',day:'numeric',month:'numeric'});
   $('todayDashboardSubtitle').textContent=`Tóm tắt ${formatDate} từ dữ liệu hiện tại của tài khoản.`;
@@ -2181,7 +2211,7 @@ function renderHome(){
 
     $('todayText').innerHTML=`Chào bạn đã đến với trang web của nhóm nhé! 🌷 Không biết hôm nay bạn muốn làm gì nào?<br><span class="muted" style="font-weight:400">${new Date().toLocaleDateString('vi-VN',{weekday:'long',day:'numeric',month:'numeric',year:'numeric'})}</span>`;
     
-    $('homeRealtimeMoodButtons').innerHTML = realtimeThemeDefs.map((m,i)=>`<button type="button" class="mood-btn guest-theme-control ${activeThemeMood===m.name?'selected':''}" data-theme-index="${i}" aria-label="${esc(m.name)}"><span class="mood-icon">${m.icon}</span><span class="mood-label">${esc(m.name)}</span></button>`).join('');
+    $('homeRealtimeMoodButtons').innerHTML = realtimeThemeDefs.map((m,i)=>`<button type="button" class="mood-btn guest-theme-control ${activeThemeMood===m.name?'selected':''}" data-theme-index="${i}" aria-label="${esc(m.name)}"><span class="mood-icon">${uiIcon(moodIconKey(m.name),m.name)}</span><span class="mood-label">${esc(m.name)}</span></button>`).join('');
     bindRealtimeMoodButtons();
 
     $('homeProgressSummary').innerHTML=`

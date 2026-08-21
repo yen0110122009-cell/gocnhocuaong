@@ -77,7 +77,12 @@ nav .navbtn.active,.btn.primary,.btn.danger{background:linear-gradient(135deg,va
 
 
 *{box-sizing:border-box}
-body{margin:0;background:var(--bg-gradient);background-size:280% 280%;color:var(--ink);font-family:Inter,system-ui,-apple-system,"Segoe UI",Arial,sans-serif;transition:background .8s ease;animation:themeFlow 16s ease-in-out infinite;position:relative}
+body{margin:0;background:var(--bg-gradient);background-size:280% 280%;color:var(--ink);font-family:Inter,system-ui,-apple-system,"Segoe UI","Noto Sans",Arial,sans-serif;transition:background .8s ease;animation:themeFlow 16s ease-in-out infinite;position:relative}/* Emoji fallback riêng để thiết bị có bộ glyph khác nhau vẫn hiển thị ổn định. */
+.emoji,.mood-icon,.achievement-icon,.bee,.ui-icon-fallback{font-family:"Noto Color Emoji","Apple Color Emoji","Segoe UI Emoji","Segoe UI Symbol",sans-serif}
+.ui-icon{display:inline-block;width:1.05em;height:1.05em;vertical-align:-.16em;flex:0 0 auto;stroke:currentColor;stroke-width:1.8;fill:none;stroke-linecap:round;stroke-linejoin:round}
+.navbtn .ui-icon{margin-right:5px;vertical-align:-.18em}
+.today-dashboard-item-marker .ui-icon{width:1.1em;height:1.1em;vertical-align:-.2em}
+@media (max-width:640px){.ui-icon{width:1em;height:1em}.navbtn .ui-icon{margin-right:3px}.emoji,.mood-icon,.achievement-icon,.bee,.ui-icon-fallback{font-family:"Noto Color Emoji","Apple Color Emoji","Segoe UI Emoji","Segoe UI Symbol",sans-serif}}
 @keyframes themeFlow{0%{background-position:0% 30%}25%{background-position:100% 0%}50%{background-position:100% 100%}75%{background-position:0% 100%}100%{background-position:0% 30%}}
 @keyframes themeSpin{to{transform:rotate(360deg)}}
 body::before{content:"";position:fixed;inset:-20vmax;z-index:-1;pointer-events:none;opacity:.35;filter:blur(60px);
@@ -114,7 +119,7 @@ label{font-size:13px;color:var(--muted);display:block;margin-bottom:4px}input,se
 .quote{background:var(--pink);border-left:4px solid var(--red);padding:14px;border-radius:10px;color:var(--red)}
 .mood{display:grid;grid-template-columns:repeat(auto-fit,minmax(118px,1fr));gap:10px;align-items:stretch}
 .mood-btn{background:#fff;border:1px solid var(--line);border-radius:14px;padding:10px 12px;cursor:pointer;display:flex;align-items:center;justify-content:flex-start;gap:8px;font-size:15px;line-height:1.2;transition:transform .2s ease,background .3s ease,border-color .3s ease,box-shadow .3s ease;min-height:48px;overflow:hidden}
-.mood-btn .mood-icon{font-size:23px;line-height:1;flex:0 0 28px;text-align:center}
+.mood-btn .mood-icon{font-size:23px;line-height:1;flex:0 0 28px;width:28px;height:28px;display:inline-flex;align-items:center;justify-content:center;text-align:center}.mood-btn .mood-icon .ui-icon{width:24px;height:24px;vertical-align:middle}
 .mood-btn .mood-label{white-space:normal;overflow-wrap:anywhere}
 .mood-btn:hover{border-color:var(--red);background:var(--pink)}
 .mood-btn.selected{background:var(--pink);border-color:var(--red);font-weight:bold}
