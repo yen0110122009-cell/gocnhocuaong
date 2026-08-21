@@ -2136,9 +2136,9 @@ function renderTodayDashboard(){
   ];
   const statBox=(row)=>`<div class="today-dashboard-stat"><strong>${esc(row.value)}</strong><span>${esc(row.label)}</span>${row.progress===null?'':`<div class="progress" aria-label="${esc(row.label)}"><i style="width:${row.progress}%"></i></div>`}</div>`;
   const todoLabel=(x)=>x.done?'Đã xong':(x.priority==='cao'?'Ưu tiên cao':x.priority==='trung'?'Ưu tiên trung bình':'Chưa hoàn thành');
-  const todoRows=orderedTodos.slice(0,5).map(x=>`<div class="today-dashboard-item ${x.done?'done':''}"><span class="today-dashboard-item-marker">${x.done?'✓':'○'}</span><div class="today-dashboard-item-main"><div class="today-dashboard-item-title">${esc(x.title||'Việc chưa đặt tên')}</div><div class="today-dashboard-item-meta">${esc([x.time,todoLabel(x)].filter(Boolean).join(' • '))}</div></div></div>`).join('');
+  const todoRows=orderedTodos.map(x=>`<label class="today-dashboard-item ${x.done?'done':''}" for="today-todo-${esc(x.id)}"><input class="today-dashboard-todo-check" id="today-todo-${esc(x.id)}" type="checkbox" ${x.done?'checked':''} onchange="toggleTodoDone('${esc(x.id)}', this.checked)" aria-label="Đánh dấu ${esc(x.title||'Việc chưa đặt tên')} hoàn thành"><span class="today-dashboard-item-marker" aria-hidden="true">${x.done?'✓':'○'}</span><span class="today-dashboard-item-main"><span class="today-dashboard-item-title">${esc(x.title||'Việc chưa đặt tên')}</span><span class="today-dashboard-item-meta">${esc([x.time,todoLabel(x)].filter(Boolean).join(' • '))}</span></span></label>`).join('');
   const scheduleRows=orderedSchedules.slice(0,5).map(x=>`<div class="today-dashboard-item"><span class="today-dashboard-item-marker">🕒</span><div class="today-dashboard-item-main"><div class="today-dashboard-item-title">${esc(x.title||'Lịch chưa đặt tên')}</div><div class="today-dashboard-item-meta">${esc(x.time||'Cả ngày')}${x.note?` • ${esc(x.note)}`:''}</div></div></div>`).join('');
-  const more=(count)=>count>5?`<div class="today-dashboard-more">Còn ${count-5} mục trong dữ liệu hôm nay.</div>`:'';
+  const more=(count)=>count>5?`<div class="today-dashboard-more">Còn ${count-5} lịch trong dữ liệu hôm nay.</div>`:'';
   const formatDate=new Date(d+'T12:00:00').toLocaleDateString('vi-VN',{weekday:'long',day:'numeric',month:'numeric'});
   $('todayDashboardSubtitle').textContent=`Tóm tắt ${formatDate} từ dữ liệu hiện tại của tài khoản.`;
   $('todayDashboardSync').textContent='State hiện tại • đồng bộ nền';
@@ -2147,7 +2147,6 @@ function renderTodayDashboard(){
   $('todayDashboardScheduleCount').textContent=`${schedules.length} lịch`;
   $('todayDashboardTodos').innerHTML=todoRows||'<div class="empty">Hôm nay chưa có việc.</div>';
   $('todayDashboardSchedule').innerHTML=scheduleRows||'<div class="empty">Hôm nay chưa có lịch trình.</div>';
-  $('todayDashboardTodos').insertAdjacentHTML('beforeend',more(todos.length));
   $('todayDashboardSchedule').insertAdjacentHTML('beforeend',more(schedules.length));
 }
 

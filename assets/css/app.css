@@ -952,3 +952,11 @@ html,body{overflow-x:hidden}
   .habit-week-scroll{padding-left:5px;padding-right:5px}
 }
 @media (prefers-reduced-motion:reduce){.habit-quick-card *,.habit-grid-card *{scroll-behavior:auto}}
+
+/* Việc hôm nay: đánh dấu hoàn thành ngay trên Tổng quan, không giới hạn số lượng mục. */
+.today-dashboard-item{cursor:pointer;transition:background .16s ease,opacity .16s ease}
+.today-dashboard-item:hover{background:rgba(255,255,255,.48);border-radius:10px}
+.today-dashboard-todo-check{flex:0 0 auto;width:19px;height:19px;margin:3px 0 0 1px;accent-color:var(--green-dark);cursor:pointer}
+.today-dashboard-item.done{opacity:.78}
+.today-dashboard-item.done .today-dashboard-item-marker{background:var(--green-light);color:var(--green-dark)}
+@media (prefers-reduced-motion:reduce){.today-dashboard-item{transition:none}}
