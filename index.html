@@ -102,7 +102,18 @@
     <div id="todayDashboardStats" class="today-dashboard-stats" aria-live="polite"></div>
     <div class="today-dashboard-columns">
       <div class="today-dashboard-panel">
-        <div class="today-dashboard-panel-head"><h3>📝 Việc hôm nay</h3><span id="todayDashboardTodoCount" class="tag"></span></div>
+        <div class="today-dashboard-panel-head today-dashboard-todo-head">
+          <h3>📝 Việc hôm nay</h3>
+          <div class="today-dashboard-todo-tools">
+            <label class="sr-only" for="todayTodoFilter">Lọc việc hôm nay</label>
+            <select id="todayTodoFilter" aria-label="Lọc việc hôm nay" onchange="setTodayTodoFilter(this.value)">
+              <option value="all">Tất cả</option>
+              <option value="pending">Chưa hoàn thành</option>
+              <option value="done">Đã hoàn thành</option>
+            </select>
+            <span id="todayDashboardTodoCount" class="tag"></span>
+          </div>
+        </div>
         <div id="todayDashboardTodos" class="today-dashboard-list"></div>
       </div>
       <div class="today-dashboard-panel">
