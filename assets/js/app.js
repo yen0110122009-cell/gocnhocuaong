@@ -2655,6 +2655,8 @@ function renderHabits(){
     const ym=currentHabitMonth,days=daysInMonth(ym),ownerId=accountOwnerId(),a=ensureHabits(ym).filter(h=>!h.ownerId||String(h.ownerId)===String(ownerId));
     renderHabitQuickSummary();
     const grid=$('habitGrid');
+    const existingWeekGroups=grid?.querySelectorAll('.habit-week-group');
+    const openWeeks=existingWeekGroups?.length?new Set(Array.from(existingWeekGroups).filter(group=>group.open).map(group=>group.dataset.weekStart)):null;
     if(grid){
       if(!a.length){
         grid.innerHTML='<div class="empty">Tháng này chưa có thói quen.</div>';
@@ -2668,7 +2670,8 @@ function renderHabits(){
             const cells=Array.from({length:count},(_,offset)=>{const day=start+offset,meta=habitDayMeta(ym,day),checked=Boolean(h.days?.[day]);return `<div class="habit-day-cell habit-day-w${meta.weekday}"><div class="check ${checked?'on':''}" aria-label="${esc(`${h.name||'Thói quen'} ngày ${day}`)}" onclick="toggleHabit('${h.id}',${day})">${checked?'✓':''}</div></div>`}).join('');
             return `<div class="habitrow habit-data-row"><div class="name"><b>${esc(h.name)}</b><br><span class="muted">Mục tiêu ${h.target} ngày • ${done}/${days}</span></div>${cells}<div class="habit-percent"><b>${p}%</b><br><button class="btn light sm" onclick="editHabit('${h.id}')">Sửa</button><button class="btn danger sm" onclick="deleteHabit('${h.id}')">Xóa</button></div></div>`;
           }).join('');
-          weekGroups.push(`<details class="habit-week-group" ${start===1?'open':''}><summary><span>Tuần ${Math.ceil(start/7)} • ngày ${start}–${end}</span><span class="tag">${count} ngày • ${a.length} thói quen</span></summary><div class="habit-week-scroll"><div class="habit-week-grid" style="--habit-day-count:${count}"><div class="habitrow habit-header"><div class="name">Thói quen</div>${header}<div>%</div></div>${rows}</div></div></details>`);
+          const weekIsOpen=openWeeks?openWeeks.has(String(start)):start===1;
+          weekGroups.push(`<details class="habit-week-group" data-week-start="${start}" ${weekIsOpen?'open':''}><summary><span>Tuần ${Math.ceil(start/7)} • ngày ${start}–${end}</span><span class="tag">${count} ngày • ${a.length} thói quen</span></summary><div class="habit-week-scroll"><div class="habit-week-grid" style="--habit-day-count:${count}"><div class="habitrow habit-header"><div class="name">Thói quen</div>${header}<div>%</div></div>${rows}</div></div></details>`);
         }
         grid.innerHTML=weekGroups.join('');
       }
