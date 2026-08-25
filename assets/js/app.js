@@ -70,7 +70,7 @@ const defaultState = {
  trash:{home:[],endday:[],todo:[],study:[],achievements:[],achievement:[],quest:[],habit:[],mood:[],schedule:[],moments:[],journal:[],summary:[],data:[]},
  sheetLinks:[{id:uid(),title:'Thói quen tháng',url:''},{id:uid(),title:'Kế hoạch tuần',url:''},{id:uid(),title:'Lịch trình',url:''}],
  xp:0, level:1, streak:0, bestStreak:0, activities:0, bestTasks:0, bestXPDay:0, todayXP:0, todayActivities:0, lastActivityDate:'',
- unlockedAchievements:[], activityDates:[], timeline:[], questClaims:[],
+ unlockedAchievements:[], activityDates:[], timeline:[], questClaims:[], dailyHabitXPClaims:{},
  customAchievements:[],
  customQuests:[],
  dailyQuestDate:'',
@@ -184,7 +184,7 @@ function saveStateWithoutSession(){
    Hồ sơ/tài khoản, cấp bậc và dữ liệu quản trị vẫn là dữ liệu hệ thống;
    kế hoạch, nhật ký, thói quen, cảm xúc, khoảnh khắc, thành tích mở khóa, XP...
    được lưu theo memberId cố định. */
-const USER_DATA_KEYS=['todos','sessions','goals','habits','habitArchive','moods','schedules','journals','moments','pomo','trash','sheetLinks','xp','level','streak','bestStreak','bestTasks','bestXPDay','todayXP','todayActivities','activities','lastActivityDate','unlockedAchievements','activityDates','timeline','questClaims','customAchievements','customQuests','dailyQuestDate','dailyQuestSeed','memberZones','achievementBadgePrefs','monthlyHabitXPClaims','adminStudyTimes','privateXPHistory','customMoods','currentEmotion'];
+const USER_DATA_KEYS=['todos','sessions','goals','habits','habitArchive','moods','schedules','journals','moments','pomo','trash','sheetLinks','xp','level','streak','bestStreak','bestTasks','bestXPDay','todayXP','todayActivities','activities','lastActivityDate','unlockedAchievements','activityDates','timeline','questClaims','dailyHabitXPClaims','customAchievements','customQuests','dailyQuestDate','dailyQuestSeed','memberZones','achievementBadgePrefs','monthlyHabitXPClaims','adminStudyTimes','privateXPHistory','customMoods','currentEmotion'];
 const USER_DATA_VERSION=2;
 function accountOwnerId(auth=state.sessionAuth){
   if(!auth || auth.role==='Guest') return null;
@@ -1728,7 +1728,7 @@ function calculateHabitMilestoneXP(ownerId){
   Object.keys(scoped.habits||{}).forEach(ym=>{
     const habits=(scoped.habits[ym]||[]).filter(h=>!h.ownerId||String(h.ownerId)===String(ownerId)); if(!habits.length)return;
     for(let day=1;day<=daysInMonth(ym);day++){
-      const completed=habits.filter(h=>!!(h.days||{})[day]).length; if(!completed)continue;
+      const completed=habits.filter(h=>{const days=h.days||{};const key=String(day).padStart(2,'0');return Boolean(days[day] ?? days[key] ?? days[`${ym}-${key}`]);}).length; if(!completed)continue;
       const pct=Math.round(completed/habits.length*100);
       milestones.forEach(m=>{
         if(pct>=m.pct){
@@ -2068,6 +2068,7 @@ function toggleTodoDone(id, checked){
     // Vẽ riêng danh sách To-do ngay lập tức, sau đó lưu cloud không render lại toàn trang.
     renderTodos();
     renderTodayDashboard();
+    try{renderQuestBoard();}catch(e){}
     persistActiveUserData();
     save({render:false});
 }
@@ -2421,8 +2422,13 @@ function studyMinutesForDate(ownerId,date){
   return getOfficialStudyMinutesForDate(ownerId,date);
 }
 function dailyHabitPercent(ownerId,date){
-  const ym=date.slice(0,7); const hs=(ensureHabits(ym)||[]).filter(h=>String(h.ownerId||ownerId)===String(ownerId)); if(!hs.length)return 0;
-  const done=hs.filter(h=>h.days&&h.days[date]).length; return Math.round(done/hs.length*100);
+  if(!ownerId || !date)return 0;
+  const iso=String(date), ym=iso.slice(0,7), day=Number(iso.slice(8,10)), dayKey=String(day).padStart(2,'0');
+  const scoped=typeof getOwnerScopedData==='function'?getOwnerScopedData(ownerId):{habits:state.habits||{}};
+  const hs=(scoped.habits?.[ym]||[]).filter(h=>!h.ownerId||String(h.ownerId)===String(ownerId));
+  if(!hs.length)return 0;
+  const done=hs.filter(h=>{const days=h?.days||{};return Boolean(days[day] ?? days[dayKey] ?? days[iso]);}).length;
+  return Math.round(done/hs.length*100);
 }
 function awardQuestZone(ownerId,q){
   if(!q.zone)return; const z=ownerZoneStore(ownerId); const key=q.zone.name;
@@ -2548,10 +2554,10 @@ if($('reviewHabit')) $('reviewHabit').onclick=()=>{
 if($('habitReminderFocus')) $('habitReminderFocus').onclick=()=>{$('habitGrid')?.scrollIntoView({behavior:'smooth',block:'start'});};
 function awardDailyHabitMilestone(ownerId, monthKey, day){
     if(!ownerId || !monthKey || !day) return 0;
-    const habits = ensureHabits(monthKey).filter(h=>String(h.ownerId)===String(ownerId));
+    const habits = ensureHabits(monthKey).filter(h=>!h.ownerId || String(h.ownerId)===String(ownerId));
     const total = habits.length;
     if(!total) return 0;
-    const completed = habits.filter(h=>!!(h.days||{})[day]).length;
+    const completed = habits.filter(h=>{const days=h.days||{};const key=String(day).padStart(2,'0');return Boolean(days[day] ?? days[key] ?? days[`${monthKey}-${key}`]);}).length;
     const pct = Math.round(completed/total*100);
     state.dailyHabitXPClaims = state.dailyHabitXPClaims || {};
     const key = `${ownerId}|${monthKey}|${day}`;
@@ -2586,6 +2592,7 @@ function toggleHabit(id,day){
     renderHabits();
     renderComparison();
     renderHome();
+    try{renderQuestBoard();}catch(e){}
 
     // Lưu local/cloud không chặn phản hồi của ô tick.
     persistActiveUserData();
@@ -3470,11 +3477,11 @@ function executeAutomationCommands(cmdText){
         // Không cộng XP trực tiếp: XP chỉ tăng nếu thời gian học làm mở khóa một thành tích.
         recalculateCurrentProgress(target.id);
         if(accountOwnerId()===target.id) checkAchievements();
-        try{renderHome();renderStudySessions();renderFounderSubjectStats();renderAchievementsView();renderComparison();renderPrivateXPHistoryAdmin();renderSummary();}catch(e){}
+        try{renderHome();renderStudySessions();renderFounderSubjectStats();renderAchievementsView();renderQuestBoard();renderComparison();renderPrivateXPHistoryAdmin();renderSummary();}catch(e){}
         count++;
       }else if(type==='ENDDAY' && p[1]){
 
-        state.moments.unshift({id:uid(),date:p[1]||todayISO(),title:`Kết ngày ${p[1]||todayISO()} 🐝🍀`,desc:`Biết ơn: ${p[2]||''} | Bài học: ${p[3]||''} | Ngày mai: ${p[4]||''}`}); count++; checkAchievements();
+        const endDate=p[1]||todayISO(),gratitude=p[2]||'',lesson=p[3]||'',tomorrow=p[4]||''; state.moments.unshift({id:uid(),date:endDate,title:`Kết ngày ${endDate} 🐝🍀`,desc:`Biết ơn: ${gratitude} | Bài học: ${lesson} | Ngày mai: ${tomorrow}`,endDay:{mood:'',gratitude,lesson,tomorrow},type:'endday'}); count++; checkAchievements();
       }else if(type==='JOURNAL' && p[5]){
         state.journals.unshift({id:uid(),date:p[1]||todayISO(),subject:p[2]||'Khác',minutes:parseInt(p[3])||0,score:parseFloat(p[4])||10,content:p[5],newKnowledge:p[6]||''}); count++;
       }else{
@@ -5041,7 +5048,7 @@ if(typeof old==='function'){
     const q=(state.customQuests||[]).find(x=>x.id===id),ownerId=patchOwnerId();if(!q||!ownerId)return;
     state.questClaims=Array.isArray(state.questClaims)?state.questClaims:[];
     if(state.questClaims.some(c=>String(c.ownerId)===String(ownerId)&&String(c.questId)===String(id)))return alert('⚠️ Nhiệm vụ này đã nhận rồi.');
-    if(!dailyQuestProgress(q,ownerId))return alert('🔒 Chưa đủ điều kiện. Hãy hoàn thành đúng yêu cầu trước.');
+    if(q.auto && !dailyQuestProgress(q,ownerId))return alert('🔒 Chưa đủ điều kiện. Hãy hoàn thành đúng yêu cầu trước.');
     const xp=Math.max(0,Number(q.xp)||0);state.questClaims.push({id:uid(),questId:q.id,ownerId,xp,claimedAt:new Date().toISOString(),zone:q.zone||null});
     recordPrivateXPHistory(ownerId,xp,'🎯 Nhiệm vụ',`Cộng ${xp} XP vì hoàn thành nhiệm vụ ${q.title}`);
     if(q.special&&q.roleReward){const role=assignSpecialRole(ownerId);awardQuestZone(ownerId,q);recordPrivateXPHistory(ownerId,0,'🎖️ Role','Nhận role '+role.name);}
@@ -5049,8 +5056,8 @@ if(typeof old==='function'){
     alert(`🎉 Đã nhận +${xp} XP${q.special?' và phần thưởng đặc biệt 🌌 Role + Zone!':' và Zone!'}`);
   };
   renderQuestBoard=function(){
-    const box=document.getElementById('questBoard');if(!box)return;ensureDailyQuests();const owner=patchOwnerId(),date=patchToday(),week=patchWeekKey(date);const qs=(state.customQuests||[]).filter(q=>q.date===date || (q.special&&q.weekStart===week));
-    box.innerHTML=qs.map(q=>{const claimed=!!owner&&(state.questClaims||[]).some(c=>String(c.ownerId)===String(owner)&&String(c.questId)===String(q.id));const done=owner?dailyQuestProgress(q,owner):false;const special=q.special;return `<div class="${special?'v3-special':'todo'}" style="margin-bottom:10px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;${special&&q.rewardBackground?`background:${q.rewardBackground};color:#fff;`:''}"><div style="flex:1"><b>${special?'🌌 NHIỆM VỤ ĐẶC BIỆT TUẦN':'🎯 NHIỆM VỤ HÔM NAY'} · ${esc(q.title)}</b><div class="kpi" style="${special?'color:#fff':''}">⚡ +${q.xp} XP · ${q.zone?.icon||'✨'} ${esc(q.zone?.name||'Zone')} ${special?'· 🎖️ Role đặc biệt':''}</div>${special?`<div style="font-size:12px;opacity:.9">Tuần ${q.weekStart} → ${q.weekEnd} · Điều kiện: 600 phút học + 5 ngày Kế hoạch 100% + 5 ngày Thói quen ≥80%</div>`:''}${done?'<div style="font-weight:900">✅ Đã đủ điều kiện</div>':''}</div>${owner?`<button class="btn sm" ${claimed||!done?'disabled':''} onclick="claimCustomQuest('${q.id}')">${claimed?'✅ Đã nhận':done?'⚡ Nhận XP + phần thưởng':'🔒 Chưa đủ điều kiện'}</button>`:''}</div>`}).join('')||'<div class="empty">Chưa có nhiệm vụ hôm nay.</div>';
+    const box=document.getElementById('questBoard');if(!box)return;ensureDailyQuests();const owner=patchOwnerId(),date=patchToday(),week=patchWeekKey(date);const qs=(state.customQuests||[]).filter(q=>(!q.auto) || q.date===date || (q.special&&q.weekStart===week));
+    box.innerHTML=qs.map(q=>{const claimed=!!owner&&(state.questClaims||[]).some(c=>String(c.ownerId)===String(owner)&&String(c.questId)===String(q.id));const done=owner?dailyQuestProgress(q,owner):false;const ready=!q.auto||done;const special=q.special;return `<div class="${special?'v3-special':'todo'}" style="margin-bottom:10px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;${special&&q.rewardBackground?`background:${q.rewardBackground};color:#fff;`:''}"><div style="flex:1"><b>${special?'🌌 NHIỆM VỤ ĐẶC BIỆT TUẦN':'🎯 NHIỆM VỤ HÔM NAY'} · ${esc(q.title)}</b><div class="kpi" style="${special?'color:#fff':''}">⚡ +${q.xp} XP · ${q.zone?.icon||'✨'} ${esc(q.zone?.name||'Zone')} ${special?'· 🎖️ Role đặc biệt':''}</div>${special?`<div style="font-size:12px;opacity:.9">Tuần ${q.weekStart} → ${q.weekEnd} · Điều kiện: 600 phút học + 5 ngày Kế hoạch 100% + 5 ngày Thói quen ≥80%</div>`:''}${done?'<div style="font-weight:900">✅ Đã đủ điều kiện</div>':''}</div>${owner?`<button class="btn sm" ${claimed||!ready?'disabled':''} onclick="claimCustomQuest('${q.id}')">${claimed?'✅ Đã nhận':ready?'⚡ Nhận XP + phần thưởng':'🔒 Chưa đủ điều kiện'}</button>`:''}</div>`}).join('')||'<div class="empty">Chưa có nhiệm vụ hôm nay.</div>';
   };
 
   /* ---------- RANKING: read the correct per-account data ---------- */
