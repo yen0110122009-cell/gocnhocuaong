@@ -84,6 +84,18 @@ test('sao lưu tự động được móc vào đồng bộ Supabase và có kh�
   assert.match(source, /restorePrompt/);
 });
 
+test('lịch trình có checkbox hoàn thành ở cả danh sách Lịch và Tổng quan', () => {
+  assert.match(source, /today-dashboard-schedule-check/);
+  assert.match(source, /schedule-item-done-check/);
+  assert.match(source, /window\.toggleScheduleDone=toggleScheduleDone/);
+  assert.match(source, /item\.done=Boolean\(checked\)/);
+  assert.match(source, /item\.completedAt=item\.done\?new Date\(\)\.toISOString\(\):null/);
+});
+
+test('form động áp dụng lại quyền nhập liệu sau khi mở modal', () => {
+  assert.match(source, /function showModal\(title,body\).*applyGuestReadOnly\(\)/);
+});
+
 test('nhiệm vụ thủ công không bị chặn bởi điều kiện nhiệm vụ tự động', () => {
   const latestClaimStart = source.lastIndexOf('claimCustomQuest=function');
   const latestClaimEnd = source.indexOf('\n  renderQuestBoard=function', latestClaimStart);

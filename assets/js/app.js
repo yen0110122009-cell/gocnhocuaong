@@ -362,7 +362,7 @@ function del(type,id){
   save();renderTrash();
 }
 function edit(type,id,patch){const x=state[type].find(x=>x.id===id);if(!x)return;Object.assign(x,patch);save()}
-function showModal(title,body){$('modalTitle').textContent=title;$('modalBody').innerHTML=body;$('modal').classList.add('show')}
+function showModal(title,body){$('modalTitle').textContent=title;$('modalBody').innerHTML=body;$('modal').classList.add('show');try{applyGuestReadOnly()}catch(e){}}
 function closeModal(){$('modal').classList.remove('show')}
 function $(id){return document.getElementById(id)}
 /* 🔐 AUTHENTICATION & SESSION LOGIC */
@@ -2198,7 +2198,7 @@ function renderTodayDashboard(){
   const statBox=(row)=>`<div class="today-dashboard-stat"><strong>${esc(row.value)}</strong><span>${esc(row.label)}</span>${row.progress===null?'':`<div class="progress" aria-label="${esc(row.label)}"><i style="width:${row.progress}%"></i></div>`}</div>`;
   const todoLabel=(x)=>x.done?'Đã xong':(x.priority==='cao'?'Ưu tiên cao':x.priority==='trung'?'Ưu tiên trung bình':'Chưa hoàn thành');
   const todoRows=visibleTodos.map(x=>`<label class="today-dashboard-item ${x.done?'done':''}" for="today-todo-${esc(x.id)}"><span class="today-dashboard-item-main"><span class="today-dashboard-item-title">${esc(x.title||'Việc chưa đặt tên')}</span><span class="today-dashboard-item-meta">${esc([x.time,todoLabel(x)].filter(Boolean).join(' • '))}</span></span><input class="today-dashboard-todo-check" id="today-todo-${esc(x.id)}" type="checkbox" ${x.done?'checked':''} onchange="toggleTodoDone('${esc(x.id)}', this.checked)" aria-label="Đánh dấu ${esc(x.title||'Việc chưa đặt tên')} hoàn thành"></label>`).join('');
-  const scheduleRows=orderedSchedules.slice(0,5).map(x=>`<div class="today-dashboard-item"><span class="today-dashboard-item-marker">${uiIcon('calendar','Lịch')}</span><div class="today-dashboard-item-main"><div class="today-dashboard-item-title">${esc(x.title||'Lịch chưa đặt tên')}</div><div class="today-dashboard-item-meta">${esc(x.time||'Cả ngày')}${x.note?` • ${esc(x.note)}`:''}</div></div></div>`).join('');
+  const scheduleRows=orderedSchedules.slice(0,5).map(x=>{const done=x.done===undefined?Boolean(x.completed):Boolean(x.done),id=esc(x.id);return `<label class="today-dashboard-item today-dashboard-schedule-item ${done?'done':''}" for="today-schedule-${id}"><span class="today-dashboard-item-marker">${uiIcon('calendar','Lịch')}</span><span class="today-dashboard-item-main"><span class="today-dashboard-item-title">${esc(x.title||'Lịch chưa đặt tên')}</span><span class="today-dashboard-item-meta">${esc(x.time||'Cả ngày')}${x.note?` • ${esc(x.note)}`:''}</span></span><input class="today-dashboard-schedule-check" id="today-schedule-${id}" type="checkbox" ${done?'checked':''} onchange="toggleScheduleDone('${id}', this.checked)" aria-label="Đánh dấu lịch ${esc(x.title||'Lịch chưa đặt tên')} hoàn thành"></label>`}).join('');
   const more=(count)=>count>5?`<div class="today-dashboard-more">Còn ${count-5} lịch trong dữ liệu hôm nay.</div>`:'';
   const formatDate=new Date(d+'T12:00:00').toLocaleDateString('vi-VN',{weekday:'long',day:'numeric',month:'numeric'});
   $('todayDashboardSubtitle').textContent=`Tóm tắt ${formatDate} từ dữ liệu hiện tại của tài khoản.`;
@@ -2809,7 +2809,7 @@ if($('addSchedule')){
         const title = $('schTitle').value.trim();
         const type = $('schType').value;
         if(!title) return alert('Vui lòng nhập tiêu đề lịch trình!');
-        state.schedules.push({ id: uid(), date, time, title, type });
+        state.schedules.push({ id: uid(), date, time, title, type, done:false, completedAt:null });
         $('schTitle').value = '';
         save();
     };
@@ -2878,14 +2878,24 @@ function bindScheduleBulkControls(){
     if(remove)remove.onclick=deleteSelectedSchedules;
     if(exit)exit.onclick=()=>setScheduleSelectMode(false);
 }
+function toggleScheduleDone(id,checked){
+    const item=(state.schedules||[]).find(x=>String(x.id)===String(id));
+    if(!item)return;
+    item.done=Boolean(checked);
+    item.completedAt=item.done?new Date().toISOString():null;
+    save();
+    renderSchedule();
+    renderTodayDashboard();
+}
+window.toggleScheduleDone=toggleScheduleDone;
 function renderSchedule(){
     const container = $('scheduleList');
     if(!container) return;
     const scheduleEscape=typeof window.esc==='function'?window.esc:(v=>String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])));
     const sorted = [...(state.schedules||[])].sort((a,b) => (a.date + (a.time||'')).localeCompare(b.date + (b.time||'')));
     container.innerHTML = sorted.length ? sorted.map(s => {
-        const id=String(s.id), selected=selectedScheduleIds.has(id);
-        return `<div class="todo schedule-item ${selected?'is-selected':''}" data-schedule-id="${scheduleEscape(id)}" data-schedule-date="${scheduleEscape(s.date||'')}">
+        const id=String(s.id), selected=selectedScheduleIds.has(id), done=s.done===undefined?Boolean(s.completed):Boolean(s.done);
+        return `<div class="todo schedule-item ${selected?'is-selected':''} ${done?'schedule-item-done':''}" data-schedule-id="${scheduleEscape(id)}" data-schedule-date="${scheduleEscape(s.date||'')}">
             <div class="schedule-item-main">
                 <input class="schedule-item-select" type="checkbox" data-schedule-id="${scheduleEscape(id)}" ${selected?'checked':''} ${scheduleSelectMode?'':'hidden'} aria-label="Chọn lịch ${scheduleEscape(s.title||'')}">
                 <div>
@@ -2893,7 +2903,7 @@ function renderSchedule(){
                     <div>${scheduleEscape(s.title)}</div>
                 </div>
             </div>
-            <div class="schedule-item-actions"><button class="btn light sm" onclick="editSchedule('${scheduleEscape(id)}')">Sửa</button><button class="btn danger sm" onclick="del('schedules', '${scheduleEscape(id)}')">Xóa</button></div>
+            <div class="schedule-item-actions"><label class="schedule-done-toggle"><input class="schedule-item-done-check" type="checkbox" ${done?'checked':''} onchange="toggleScheduleDone('${scheduleEscape(id)}', this.checked)" aria-label="Đánh dấu lịch ${scheduleEscape(s.title||'')} hoàn thành"><span>${done?'Đã hoàn thành':'Hoàn thành'}</span></label><button class="btn light sm" onclick="editSchedule('${scheduleEscape(id)}')">Sửa</button><button class="btn danger sm" onclick="del('schedules', '${scheduleEscape(id)}')">Xóa</button></div>
         </div>`;
     }).join('') : '<div class="empty">Chưa có lịch trình.</div>';
     bindScheduleBulkControls();
