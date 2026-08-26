@@ -2198,7 +2198,7 @@ function renderTodayDashboard(){
   const statBox=(row)=>`<div class="today-dashboard-stat"><strong>${esc(row.value)}</strong><span>${esc(row.label)}</span>${row.progress===null?'':`<div class="progress" aria-label="${esc(row.label)}"><i style="width:${row.progress}%"></i></div>`}</div>`;
   const todoLabel=(x)=>x.done?'Đã xong':(x.priority==='cao'?'Ưu tiên cao':x.priority==='trung'?'Ưu tiên trung bình':'Chưa hoàn thành');
   const todoRows=visibleTodos.map(x=>`<label class="today-dashboard-item ${x.done?'done':''}" for="today-todo-${esc(x.id)}"><span class="today-dashboard-item-main"><span class="today-dashboard-item-title">${esc(x.title||'Việc chưa đặt tên')}</span><span class="today-dashboard-item-meta">${esc([x.time,todoLabel(x)].filter(Boolean).join(' • '))}</span></span><input class="today-dashboard-todo-check" id="today-todo-${esc(x.id)}" type="checkbox" ${x.done?'checked':''} onchange="toggleTodoDone('${esc(x.id)}', this.checked)" aria-label="Đánh dấu ${esc(x.title||'Việc chưa đặt tên')} hoàn thành"></label>`).join('');
-  const scheduleRows=orderedSchedules.slice(0,5).map(x=>{const done=x.done===undefined?Boolean(x.completed):Boolean(x.done),id=esc(x.id);return `<label class="today-dashboard-item today-dashboard-schedule-item ${done?'done':''}" for="today-schedule-${id}"><span class="today-dashboard-item-marker">${uiIcon('calendar','Lịch')}</span><span class="today-dashboard-item-main"><span class="today-dashboard-item-title">${esc(x.title||'Lịch chưa đặt tên')}</span><span class="today-dashboard-item-meta">${esc(x.time||'Cả ngày')}${x.note?` • ${esc(x.note)}`:''}</span></span><input class="today-dashboard-schedule-check" id="today-schedule-${id}" type="checkbox" ${done?'checked':''} onchange="toggleScheduleDone('${id}', this.checked)" aria-label="Đánh dấu lịch ${esc(x.title||'Lịch chưa đặt tên')} hoàn thành"></label>`}).join('');
+  const scheduleRows=orderedSchedules.slice(0,5).map(x=>{const done=scheduleDoneValue(x),id=esc(x.id);return `<label class="today-dashboard-item today-dashboard-schedule-item ${done?'done':''}" for="today-schedule-${id}"><span class="today-dashboard-item-marker">${uiIcon('calendar','Lịch')}</span><span class="today-dashboard-item-main"><span class="today-dashboard-item-title">${esc(x.title||'Lịch chưa đặt tên')}</span><span class="today-dashboard-item-meta">${esc(x.time||'Cả ngày')}${x.note?` • ${esc(x.note)}`:''}</span></span><input class="today-dashboard-schedule-check" id="today-schedule-${id}" type="checkbox" ${done?'checked':''} onchange="toggleScheduleDone('${id}', this.checked)" aria-label="Đánh dấu lịch ${esc(x.title||'Lịch chưa đặt tên')} hoàn thành"></label>`}).join('');
   const more=(count)=>count>5?`<div class="today-dashboard-more">Còn ${count-5} lịch trong dữ liệu hôm nay.</div>`:'';
   const formatDate=new Date(d+'T12:00:00').toLocaleDateString('vi-VN',{weekday:'long',day:'numeric',month:'numeric'});
   $('todayDashboardSubtitle').textContent=`Tóm tắt ${formatDate} từ dữ liệu hiện tại của tài khoản.`;
@@ -2878,6 +2878,18 @@ function bindScheduleBulkControls(){
     if(remove)remove.onclick=deleteSelectedSchedules;
     if(exit)exit.onclick=()=>setScheduleSelectMode(false);
 }
+function scheduleDoneValue(item){return item?.done===undefined?Boolean(item?.completed):Boolean(item?.done);}
+function scheduleIsoDate(date){const value=String(date||'');return value.length>=10?value.slice(0,10):'';}
+function scheduleAddDays(date,amount){const d=new Date(`${date}T12:00:00`);d.setDate(d.getDate()+amount);return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;}
+function scheduleWeekStart(date){const d=new Date(`${date}T12:00:00`);d.setDate(d.getDate()-((d.getDay()+6)%7));return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;}
+function scheduleMonthEnd(date){const d=new Date(`${date.slice(0,7)}-01T12:00:00`);d.setMonth(d.getMonth()+1);d.setDate(0);return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;}
+function scheduleRangeStats(rows,start,end){const items=rows.filter(x=>{const date=scheduleIsoDate(x.date);return date&&date>=start&&date<=end;});const done=items.filter(scheduleDoneValue).length;return {done,total:items.length,pct:items.length?Math.round(done/items.length*100):0};}
+function renderScheduleStats(){
+    const host=$('scheduleStats');if(!host)return;
+    const today=typeof todayISO==='function'?todayISO():new Date().toISOString().slice(0,10),weekStart=scheduleWeekStart(today),weekEnd=scheduleAddDays(weekStart,6),monthStart=`${today.slice(0,7)}-01`,monthEnd=scheduleMonthEnd(today),rows=Array.isArray(state.schedules)?state.schedules:[],week=scheduleRangeStats(rows,weekStart,weekEnd),month=scheduleRangeStats(rows,monthStart,monthEnd);
+    const card=(label,range,stat)=>`<div class="schedule-stat-card"><div class="schedule-stat-card-head"><b>${label}</b><span>${stat.done}/${stat.total}</span></div><div class="schedule-stat-range">${range}</div><div class="progress" aria-label="${label}: ${stat.pct}%"><i style="width:${stat.pct}%"></i></div><strong>${stat.pct}% hoàn thành</strong></div>`;
+    host.innerHTML=card('Tuần này',`${weekStart} → ${weekEnd}`,week)+card('Tháng này',`${monthStart} → ${monthEnd}`,month);
+}
 function toggleScheduleDone(id,checked){
     const item=(state.schedules||[]).find(x=>String(x.id)===String(id));
     if(!item)return;
@@ -2885,6 +2897,7 @@ function toggleScheduleDone(id,checked){
     item.completedAt=item.done?new Date().toISOString():null;
     save();
     renderSchedule();
+    renderScheduleStats();
     renderTodayDashboard();
 }
 window.toggleScheduleDone=toggleScheduleDone;
@@ -2894,7 +2907,7 @@ function renderSchedule(){
     const scheduleEscape=typeof window.esc==='function'?window.esc:(v=>String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])));
     const sorted = [...(state.schedules||[])].sort((a,b) => (a.date + (a.time||'')).localeCompare(b.date + (b.time||'')));
     container.innerHTML = sorted.length ? sorted.map(s => {
-        const id=String(s.id), selected=selectedScheduleIds.has(id), done=s.done===undefined?Boolean(s.completed):Boolean(s.done);
+        const id=String(s.id), selected=selectedScheduleIds.has(id), done=scheduleDoneValue(s);
         return `<div class="todo schedule-item ${selected?'is-selected':''} ${done?'schedule-item-done':''}" data-schedule-id="${scheduleEscape(id)}" data-schedule-date="${scheduleEscape(s.date||'')}">
             <div class="schedule-item-main">
                 <input class="schedule-item-select" type="checkbox" data-schedule-id="${scheduleEscape(id)}" ${selected?'checked':''} ${scheduleSelectMode?'':'hidden'} aria-label="Chọn lịch ${scheduleEscape(s.title||'')}">
@@ -2908,6 +2921,7 @@ function renderSchedule(){
     }).join('') : '<div class="empty">Chưa có lịch trình.</div>';
     bindScheduleBulkControls();
     updateScheduleBulkUi();
+    renderScheduleStats();
     let longPressTriggered=false;
     const clearLongPress=()=>{clearTimeout(scheduleLongPressTimer);scheduleLongPressTimer=0;};
     container.onpointerdown=(event)=>{

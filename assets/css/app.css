@@ -772,7 +772,8 @@ html,body{overflow-x:hidden}
 .schedule-item-main{display:flex;align-items:flex-start;gap:10px;min-width:0;flex:1}
 .schedule-item-main>div{min-width:0}
 .schedule-item-select{flex:0 0 auto;margin-top:3px}
-.schedule-item-actions{display:flex;align-items:center;gap:7px;flex-wrap:wrap;justify-content:flex-end}.schedule-done-toggle{display:inline-flex;align-items:center;gap:5px;font-size:11px;color:var(--muted);cursor:pointer;white-space:nowrap}.schedule-item-done-check{width:18px;height:18px;accent-color:var(--green-dark);cursor:pointer}.schedule-item-done{opacity:.78}.schedule-item-done .schedule-item-main>div:last-child{text-decoration:line-through;color:var(--muted)}
+.schedule-item-actions{display:flex;align-items:center;gap:7px;flex-wrap:wrap;justify-content:flex-end}.schedule-done-toggle{display:inline-flex;align-items:center;gap:5px;min-height:36px;padding:4px 7px;border-radius:9px;font-size:11px;color:var(--muted);cursor:pointer;white-space:nowrap}.schedule-done-toggle:has(input:checked){background:var(--green-light);color:var(--green-dark);font-weight:800}.schedule-item-done-check{width:18px;height:18px;accent-color:var(--green-dark);cursor:pointer}.schedule-item-done{opacity:.78}.schedule-item-done .schedule-item-main>div:last-child{text-decoration:line-through;color:var(--muted)}
+.schedule-stats-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}.schedule-stats-head h3{margin:0 0 4px}.schedule-stats-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:12px}.schedule-stat-card{padding:13px;border:1px solid color-mix(in srgb,var(--line) 78%,#fff 22%);border-radius:14px;background:color-mix(in srgb,var(--pink) 48%,#fff 52%)}.schedule-stat-card-head{display:flex;justify-content:space-between;gap:8px;font-size:14px}.schedule-stat-card-head span{color:var(--red);font-weight:900}.schedule-stat-range{margin:5px 0 9px;color:var(--muted);font-size:11px}.schedule-stat-card strong{display:block;margin-top:7px;color:var(--red);font-size:13px}
 @media (max-width:640px){
   .schedule-bulk-bar{align-items:stretch;gap:8px}
   .schedule-bulk-bar>*{min-height:40px}
@@ -781,7 +782,7 @@ html,body{overflow-x:hidden}
   .schedule-item{align-items:flex-start!important;gap:8px!important}
   .schedule-item-main{align-items:flex-start}
   .schedule-item-actions{width:100%;justify-content:flex-start;margin-left:28px}
-  .schedule-item-actions .btn{min-height:40px}
+  .schedule-item-actions .btn{min-height:40px}.schedule-done-toggle{min-height:40px;padding:5px 9px}.schedule-stats-grid{grid-template-columns:1fr}.schedule-stats-head{display:block}.schedule-stats-head .tag{display:inline-block;margin-top:8px}
 }
 @media (prefers-reduced-motion: reduce){.schedule-item{transition:none!important}}
 
@@ -814,7 +815,7 @@ html,body{overflow-x:hidden}
 .today-dashboard-item-meta{margin-top:3px;font-size:11px;color:var(--muted);overflow-wrap:anywhere}
 .today-dashboard-more{margin-top:8px;font-size:11px;color:var(--muted);font-style:italic}
 @media (max-width:780px){.today-dashboard-head{display:block}.today-dashboard-sync{display:inline-block;margin-top:10px}.today-dashboard-stats{grid-template-columns:repeat(2,minmax(0,1fr))}.today-dashboard-columns{grid-template-columns:1fr}.today-dashboard-todo-head{align-items:flex-start}.today-dashboard-todo-tools{flex-wrap:wrap}.today-dashboard-todo-tools select{min-height:38px;flex:1 1 150px}.today-dashboard-todo-tools .tag{white-space:nowrap}}
-@media (max-width:420px){.today-dashboard-todo-head{display:block}.today-dashboard-todo-tools{justify-content:flex-start;margin-top:8px}.today-dashboard-todo-tools select{max-width:none}.today-dashboard-item{gap:7px}.today-dashboard-todo-check{margin-left:8px}}
+@media (max-width:420px){.today-dashboard-todo-head{display:block}.today-dashboard-todo-tools{justify-content:flex-start;margin-top:8px}.today-dashboard-todo-tools select{max-width:none}.today-dashboard-item{gap:7px}.today-dashboard-todo-check,.today-dashboard-schedule-check{margin-left:8px}.today-dashboard-schedule-item{align-items:center}.today-dashboard-schedule-item .today-dashboard-item-main{padding-right:2px}}
 @media (prefers-reduced-motion:reduce){.today-dashboard *{scroll-behavior:auto}}
 
 /* ===== HABIT QUICK SUMMARY ===== */

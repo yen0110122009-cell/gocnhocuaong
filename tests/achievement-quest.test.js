@@ -9,6 +9,7 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const appPath = path.resolve(here, '..', 'assets', 'js', 'app.js');
 const source = fs.readFileSync(appPath, 'utf8');
 const cssSource = fs.readFileSync(path.resolve(here, '..', 'assets', 'css', 'app.css'), 'utf8');
+const htmlSource = fs.readFileSync(path.resolve(here, '..', 'index.html'), 'utf8');
 
 function extractFunction(name, endMarker) {
   const start = source.indexOf(`function ${name}`);
@@ -84,12 +85,27 @@ test('sao lưu tự động được móc vào đồng bộ Supabase và có kh�
   assert.match(source, /restorePrompt/);
 });
 
+test('thống kê lịch trình tính đúng phạm vi tuần/tháng và cập nhật theo trạng thái hoàn thành', () => {
+  assert.match(source, /function scheduleWeekStart\(date\)/);
+  assert.match(source, /function scheduleMonthEnd\(date\)/);
+  assert.match(source, /function scheduleRangeStats\(rows,start,end\)/);
+  assert.match(htmlSource, /id="scheduleStats"/);
+  assert.match(source, /renderScheduleStats\(\)/);
+});
+
 test('lịch trình có checkbox hoàn thành ở cả danh sách Lịch và Tổng quan', () => {
   assert.match(source, /today-dashboard-schedule-check/);
   assert.match(source, /schedule-item-done-check/);
   assert.match(source, /window\.toggleScheduleDone=toggleScheduleDone/);
   assert.match(source, /item\.done=Boolean\(checked\)/);
   assert.match(source, /item\.completedAt=item\.done\?new Date\(\)\.toISOString\(\):null/);
+});
+
+test('checkbox lịch có vùng chạm và bố cục mobile riêng', () => {
+  assert.match(cssSource, /\.schedule-done-toggle\{[^}]*min-height:36px/);
+  assert.match(cssSource, /\.schedule-stats-grid\{[^}]*grid-template-columns:repeat\(2/);
+  assert.match(cssSource, /\.today-dashboard-schedule-check/);
+  assert.match(cssSource, /@media \(max-width:640px\)[\s\S]*\.schedule-done-toggle\{min-height:40px/);
 });
 
 test('form động áp dụng lại quyền nhập liệu sau khi mở modal', () => {
