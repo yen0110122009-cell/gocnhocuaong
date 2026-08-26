@@ -76,6 +76,15 @@ test('các ngưỡng thành tích cơ bản đã được nâng lên nhưng vẫ
   assert.match(source, /if\(difficultyFloors\[key\]\?\.\[ti\]\)threshold=Math\.max\(threshold,difficultyFloors\[key\]\[ti\]\)/);
 });
 
+test('sao lưu tự động xử lý offline và retry khi mạng khôi phục', () => {
+  assert.match(source, /offline-local-save/);
+  assert.match(source, /cloud-write-offline/);
+  assert.match(source, /network-offline/);
+  assert.match(source, /before-reconnect/);
+  assert.match(source, /studyEmpireCloudSync\?\.flush/);
+  assert.match(source, /Đang offline/);
+});
+
 test('sao lưu tự động được móc vào đồng bộ Supabase và có khôi phục', () => {
   assert.match(source, /captureSnapshot\(snapshot,'before-cloud-write'\)/);
   assert.match(source, /captureCurrent\('before-cloud-pull'\)/);

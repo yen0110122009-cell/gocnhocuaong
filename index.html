@@ -704,7 +704,7 @@ SCHEDULE|2026-08-10|20:00|Ôn bài|Học tập"></textarea>
  </div>
  <div class="card" style="margin-top:18px">
   <h2>🛡️ Sao lưu tự động chống mất dữ liệu</h2>
-  <p class="muted">Mỗi lần tải hoặc ghi dữ liệu với Supabase, ứng dụng tự lưu một bản sao cục bộ trước thao tác đồng bộ. Bản sao được lưu trong trình duyệt, giữ tối đa 12 phiên bản gần nhất và không chứa phiên đăng nhập.</p>
+  <p class="muted">Mỗi lần tải hoặc ghi dữ liệu với Supabase, ứng dụng tự lưu một bản sao cục bộ trước thao tác đồng bộ. Khi mất kết nối mạng, dữ liệu mới vẫn được lưu trong trình duyệt, giữ trong hàng đợi để tự thử đồng bộ lại khi mạng khôi phục. Bản sao được lưu trong trình duyệt, giữ tối đa 12 phiên bản gần nhất và không chứa phiên đăng nhập.</p>
   <div id="autoBackupStatus" class="kpi">Đang kiểm tra bản sao tự động...</div>
   <div id="autoBackupList" style="display:grid;gap:6px;margin-top:8px"></div>
  </div>

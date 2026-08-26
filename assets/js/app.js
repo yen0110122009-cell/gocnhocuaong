@@ -333,6 +333,7 @@ function save(options={}){
   try{const ownerId=accountOwnerId();if(ownerId)recalculateCurrentProgress(ownerId,{persist:false});}catch(e){console.warn('Không thể tái tính tiến độ trước khi lưu',e);}
   persistActiveUserData();
   saveStateWithoutSession();
+  if(navigator.onLine===false){try{window.studyEmpireAutoBackup?.captureCurrent?.('offline-local-save')}catch(e){console.warn('Không thể tạo backup offline',e);}}
   if(!options || options.render!==false) requestRenderAll();
   scheduleCloudPush(Boolean(options && options.immediateCloud));
 }
@@ -4406,7 +4407,7 @@ if(typeof old==='function'){
         console.log('☁️ Supabase V2: đã tải toàn bộ state trước khi render.');
         if(needsPush)flush();
         return true;
-      }catch(e){console.warn('☁️ Supabase V2: lỗi tải dữ liệu',e);return false}
+      }catch(e){try{if(navigator.onLine===false)window.studyEmpireAutoBackup?.captureCurrent?.('cloud-pull-offline')}catch(ignore){}console.warn('☁️ Supabase V2: lỗi tải dữ liệu',e);return false}
     })();
     return bootPromise;
   }
@@ -4416,7 +4417,7 @@ if(typeof old==='function'){
       const res=await request(endpoint(),{method:'POST',headers:headers({Prefer:'return=minimal'}),body:JSON.stringify({id:CFG.id,payload:Object.assign({},snapshot.state,{[META]:Object.assign({},snapshot.meta,{externalStores:snapshot.external})})})});
       lastSyncedState=clone(snapshot.state);lastSyncedExternal=clone(snapshot.external);
       console.log('☁️ Supabase V2: đã tạo global_state.');return !!res;
-    }catch(e){console.warn('☁️ Supabase V2: lỗi tạo global_state',e);return false}
+    }catch(e){try{if(navigator.onLine===false)window.studyEmpireAutoBackup?.captureCurrent?.('cloud-create-offline')}catch(ignore){}console.warn('☁️ Supabase V2: lỗi tạo global_state',e);return false}
   }
   async function flush(){
     if(inflight)return inflight;
@@ -4446,7 +4447,7 @@ if(typeof old==='function'){
         const applied=unwrap(finalPayload||{});lastSyncedState=clone(applied.state);lastSyncedExternal=clone(applied.external);lastCloudEnvelope=finalPayload;
         try{window.studyEmpireAutoBackup?.captureSnapshot({state:applied.state,external:applied.external,meta:applied.meta},'after-cloud-write')}catch(e){}
         console.log('☁️ Supabase V2: đã lưu toàn bộ state và kho ngoài.');return true;
-      }catch(e){pending=snapshot;console.warn('☁️ Supabase V2: lưu thất bại, sẽ giữ hàng đợi để thử lại',e);return false}
+      }catch(e){pending=snapshot;try{if(navigator.onLine===false)window.studyEmpireAutoBackup?.captureCurrent?.('cloud-write-offline')}catch(ignore){}console.warn('☁️ Supabase V2: lưu thất bại, sẽ giữ hàng đợi để thử lại',e);return false}
     })().finally(()=>{inflight=null;if(pending)setTimeout(flush,0)});
     return inflight;
   }
@@ -4518,10 +4519,12 @@ if(typeof old==='function'){
     alert('✅ Đã khôi phục bản sao tự động. Hệ thống đã xếp hàng đồng bộ lại với Supabase.');renderList();
   }
   function restorePrompt(){const input=document.createElement('input');input.type='file';input.accept='application/json,.json';input.onchange=async()=>{const file=input.files?.[0];if(!file)return;try{restore(JSON.parse(await file.text()));}catch(e){alert('File backup không đọc được.');}};input.click();}
-  async function renderList(){const host=document.getElementById('autoBackupStatus');if(!host)return;const rows=await list();const latest=rows[0];host.innerHTML=latest?`✅ Bản sao gần nhất: ${new Date(latest.savedAt).toLocaleString('vi-VN')} · ${rows.length} bản đang giữ trong trình duyệt`:'Chưa có bản sao tự động. Bản đầu tiên sẽ tạo trước lần đồng bộ Supabase kế tiếp.';const listHost=document.getElementById('autoBackupList');if(listHost)listHost.innerHTML=rows.slice(0,5).map(x=>`<div class="kpi">💾 ${new Date(x.savedAt).toLocaleString('vi-VN')} · ${x.reason||'automatic'} <button class="btn light sm" onclick="window.studyEmpireAutoBackup.downloadById('${x.id}')">Tải xuống</button></div>`).join('');}
+  async function renderList(){const host=document.getElementById('autoBackupStatus');if(!host)return;const rows=await list();const latest=rows[0],network=navigator.onLine?'🟢 Đang có kết nối mạng':'🟠 Đang offline — thay đổi vẫn được lưu cục bộ và sẽ thử đồng bộ lại khi có mạng';host.innerHTML=`${network}<br>${latest?`✅ Bản sao gần nhất: ${new Date(latest.savedAt).toLocaleString('vi-VN')} · ${rows.length} bản đang giữ trong trình duyệt`:'Chưa có bản sao tự động. Bản đầu tiên sẽ tạo trước lần đồng bộ Supabase kế tiếp.'}`;const listHost=document.getElementById('autoBackupList');if(listHost)listHost.innerHTML=rows.slice(0,5).map(x=>`<div class="kpi">💾 ${new Date(x.savedAt).toLocaleString('vi-VN')} · ${x.reason||'automatic'} <button class="btn light sm" onclick="window.studyEmpireAutoBackup.downloadById('${x.id}')">Tải xuống</button></div>`).join('');}
   async function downloadById(id){const row=(await list()).find(x=>x.id===id);download(row);}
   window.studyEmpireAutoBackup={captureSnapshot,captureCurrent,list,downloadLatest,downloadById,restorePrompt,restore,render:renderList};
   window.addEventListener('pagehide',()=>{try{captureCurrent('before-pagehide');}catch(e){}});
+  window.addEventListener('offline',()=>{try{captureCurrent('network-offline');}catch(e){};renderList();});
+  window.addEventListener('online',()=>{try{captureCurrent('before-reconnect');}catch(e){};setTimeout(()=>window.studyEmpireCloudSync?.flush?.(),0);renderList();});
   window.addEventListener('DOMContentLoaded',()=>setTimeout(renderList,0));
   setTimeout(renderList,0);
 })();
