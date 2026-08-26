@@ -252,7 +252,17 @@ function switchUserData(auth){
   }
 }
 ensureUserStore();
-
+window.studyEmpireStateAccess={
+  get:()=>state,
+  replace:next=>{
+    const session=state.sessionAuth||null;
+    Object.keys(state).forEach(k=>delete state[k]);
+    Object.assign(state,cloneValue(next)||{});
+    state.sessionAuth=session;
+    try{ensureUserStore();}catch(e){}
+    return state;
+  }
+};
 
 /* =========================================================
    ☁️ SUPABASE CLOUD SYNC
@@ -4263,7 +4273,9 @@ if(typeof old==='function'){
     const current=stripSession(state);
     const external=externalStores();
     seq+=1;localStorage.setItem(SEQ_KEY,String(seq));
-    return {state:current,external,meta:{version:CFG.version,clientId,seq,savedAt:new Date().toISOString()}};
+    const snapshot={state:current,external,meta:{version:CFG.version,clientId,seq,savedAt:new Date().toISOString()}};
+    try{window.studyEmpireAutoBackup?.captureSnapshot(snapshot,'before-cloud-write')}catch(e){}
+    return snapshot;
   }
   function unwrap(payload){
     const copy=clone(payload)||{};
@@ -4356,6 +4368,7 @@ if(typeof old==='function'){
     if(bootPromise)return bootPromise;
     bootPromise=(async()=>{
       try{
+        try{window.studyEmpireAutoBackup?.captureCurrent('before-cloud-pull')}catch(e){}
         const localState=stripSession(state);const localExternal=externalStores();
         const payload=await readEnvelope();
         if(!payload){console.warn('☁️ Supabase chưa có global_state.');return false}
@@ -4407,6 +4420,7 @@ if(typeof old==='function'){
           lastSyncedState=clone(verified.state);lastSyncedExternal=clone(verified.external);
         }
         const applied=unwrap(finalPayload||{});lastSyncedState=clone(applied.state);lastSyncedExternal=clone(applied.external);lastCloudEnvelope=finalPayload;
+        try{window.studyEmpireAutoBackup?.captureSnapshot({state:applied.state,external:applied.external,meta:applied.meta},'after-cloud-write')}catch(e){}
         console.log('☁️ Supabase V2: đã lưu toàn bộ state và kho ngoài.');return true;
       }catch(e){pending=snapshot;console.warn('☁️ Supabase V2: lưu thất bại, sẽ giữ hàng đợi để thử lại',e);return false}
     })().finally(()=>{inflight=null;if(pending)setTimeout(flush,0)});
@@ -4417,6 +4431,75 @@ if(typeof old==='function'){
     return flush();
   }
   window.studyEmpireCloudSync={pull,push,create,flush,pushExternal:()=>push('external'),status:()=>({pending:!!pending,inflight:!!inflight,lastSyncedAt:lastCloudEnvelope?.__studyEmpireSync?.mergedAt||null})};
+})();
+
+/* ---- automatic local backup before/after Supabase synchronization ---- */
+(function(){
+  'use strict';
+  if(window.__studyEmpireAutoBackupV1)return;
+  window.__studyEmpireAutoBackupV1=true;
+  const DB_NAME='study_empire_auto_backup_v1',STORE='snapshots',FALLBACK_KEY='study_empire_auto_backups_v1',MAX=12;
+  const clone=value=>value===undefined?undefined:JSON.parse(JSON.stringify(value));
+  const stamp=()=>new Date().toISOString();
+  const safeState=()=>{const current=window.studyEmpireStateAccess?.get?.()||{};const copy=clone(current);if(copy)delete copy.sessionAuth;return copy||{};};
+  const fallbackRead=()=>{try{const rows=JSON.parse(localStorage.getItem(FALLBACK_KEY)||'[]');return Array.isArray(rows)?rows:[];}catch(e){return[];}};
+  const fallbackWrite=rows=>{try{localStorage.setItem(FALLBACK_KEY,JSON.stringify(rows.slice(0,MAX)));}catch(e){console.warn('💾 Không thể lưu backup dự phòng trong trình duyệt',e);}};
+  let dbPromise=null;
+  function openDb(){
+    if(dbPromise)return dbPromise;
+    if(!window.indexedDB)return Promise.resolve(null);
+    dbPromise=new Promise(resolve=>{try{const req=indexedDB.open(DB_NAME,1);req.onupgradeneeded=()=>{const db=req.result;if(!db.objectStoreNames.contains(STORE)){const s=db.createObjectStore(STORE,{keyPath:'id'});s.createIndex('savedAt','savedAt');}};req.onsuccess=()=>resolve(req.result);req.onerror=()=>resolve(null);}catch(e){resolve(null);}});
+    return dbPromise;
+  }
+  async function list(){
+    const db=await openDb();
+    if(!db)return fallbackRead().sort((a,b)=>String(b.savedAt).localeCompare(String(a.savedAt)));
+    return new Promise(resolve=>{try{const tx=db.transaction(STORE,'readonly'),req=tx.objectStore(STORE).getAll();req.onsuccess=()=>resolve((req.result||[]).sort((a,b)=>String(b.savedAt).localeCompare(String(a.savedAt))));req.onerror=()=>resolve(fallbackRead());}catch(e){resolve(fallbackRead());}});
+  }
+  async function prune(db){
+    const rows=await list();
+    if(rows.length<=MAX)return;
+    const remove=rows.slice(MAX).map(x=>x.id);
+    if(!db){fallbackWrite(rows.slice(0,MAX));return;}
+    try{const tx=db.transaction(STORE,'readwrite'),store=tx.objectStore(STORE);remove.forEach(id=>store.delete(id));}catch(e){}
+  }
+  async function put(snapshot){
+    const db=await openDb();
+    if(!db){const rows=fallbackRead().filter(x=>x.id!==snapshot.id);rows.unshift(snapshot);fallbackWrite(rows);return snapshot;}
+    try{await new Promise((resolve,reject)=>{const tx=db.transaction(STORE,'readwrite');tx.objectStore(STORE).put(snapshot);tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);});await prune(db);}catch(e){const rows=fallbackRead().filter(x=>x.id!==snapshot.id);rows.unshift(snapshot);fallbackWrite(rows);}
+    return snapshot;
+  }
+  function makeSnapshot(input,reason){
+    const source=input&&input.state?input.state:safeState();
+    const snapshot={id:`backup-${Date.now()}-${Math.random().toString(36).slice(2,8)}`,savedAt:stamp(),reason:reason||'automatic',state:clone(source)||{},external:clone(input?.external||null),syncMeta:clone(input?.meta||null),format:'study-empire-auto-backup-v1'};
+    return snapshot;
+  }
+  function captureSnapshot(input,reason){const snapshot=makeSnapshot(input,reason);return put(snapshot).then(result=>{renderList();return result;}).catch(()=>snapshot);}
+  function captureCurrent(reason){return captureSnapshot(null,reason);}
+  function download(snapshot){
+    if(!snapshot)return alert('Chưa có bản sao tự động nào để tải xuống.');
+    const blob=new Blob([JSON.stringify(snapshot,null,2)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`goc-nho-cua-ong-auto-backup-${snapshot.savedAt.slice(0,19).replace(/[:T]/g,'-')}.json`;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+  }
+  async function downloadLatest(){const rows=await list();download(rows[0]);}
+  function applyExternal(external){
+    if(!external||typeof external!=='object')return;
+    Object.entries(external.localExtras||{}).forEach(([key,value])=>{if(!['study_momentum_ong_v9','studyEmpireSupabaseClientIdV2','studyEmpireSupabaseSeqV2','studyEmpireAIStudioV1'].includes(key))localStorage.setItem(key,String(value));});
+  }
+  function restore(snapshot){
+    if(!snapshot||!snapshot.state||typeof snapshot.state!=='object')return alert('File backup không hợp lệ hoặc thiếu dữ liệu ứng dụng.');
+    if(!confirm(`Khôi phục bản sao ngày ${new Date(snapshot.savedAt||Date.now()).toLocaleString('vi-VN')}? Dữ liệu hiện tại sẽ được lưu thêm một bản sao trước khi khôi phục.`))return;
+    captureCurrent('before-restore');
+    const current=window.studyEmpireStateAccess?.get?.()||{};const session=current.sessionAuth||null;window.studyEmpireStateAccess?.replace?.(snapshot.state);const restored=window.studyEmpireStateAccess?.get?.();if(restored)restored.sessionAuth=session;
+    try{window.ensureUserStore?.();applyExternal(snapshot.external);window.saveStateWithoutSession?.();window.renderAll?.();window.studyEmpireCloudSync?.push('restore-backup');}catch(e){console.error('Khôi phục backup thất bại',e);alert('Không thể khôi phục backup. Dữ liệu hiện tại chưa được xóa khỏi bản sao tự động.');return;}
+    alert('✅ Đã khôi phục bản sao tự động. Hệ thống đã xếp hàng đồng bộ lại với Supabase.');renderList();
+  }
+  function restorePrompt(){const input=document.createElement('input');input.type='file';input.accept='application/json,.json';input.onchange=async()=>{const file=input.files?.[0];if(!file)return;try{restore(JSON.parse(await file.text()));}catch(e){alert('File backup không đọc được.');}};input.click();}
+  async function renderList(){const host=document.getElementById('autoBackupStatus');if(!host)return;const rows=await list();const latest=rows[0];host.innerHTML=latest?`✅ Bản sao gần nhất: ${new Date(latest.savedAt).toLocaleString('vi-VN')} · ${rows.length} bản đang giữ trong trình duyệt`:'Chưa có bản sao tự động. Bản đầu tiên sẽ tạo trước lần đồng bộ Supabase kế tiếp.';const listHost=document.getElementById('autoBackupList');if(listHost)listHost.innerHTML=rows.slice(0,5).map(x=>`<div class="kpi">💾 ${new Date(x.savedAt).toLocaleString('vi-VN')} · ${x.reason||'automatic'} <button class="btn light sm" onclick="window.studyEmpireAutoBackup.downloadById('${x.id}')">Tải xuống</button></div>`).join('');}
+  async function downloadById(id){const row=(await list()).find(x=>x.id===id);download(row);}
+  window.studyEmpireAutoBackup={captureSnapshot,captureCurrent,list,downloadLatest,downloadById,restorePrompt,restore,render:renderList};
+  window.addEventListener('pagehide',()=>{try{captureCurrent('before-pagehide');}catch(e){}});
+  window.addEventListener('DOMContentLoaded',()=>setTimeout(renderList,0));
+  setTimeout(renderList,0);
 })();
 
 
@@ -4856,6 +4939,8 @@ if(typeof old==='function'){
         const name=`${recipe[0]} — ${meta.label} ${String(num).padStart(3,'0')}`;
         const desc=recipe[1].replace('{n}',threshold);
         const key=recipe[2];
+        const difficultyFloors={tasks:[8,20,50,120,250,500,1000,2500,6000,15000,30000],study:[180,480,1200,3000,7000,15000,30000,60000,120000,250000,500000],habits:[15,40,100,250,600,1200,2500,5000,10000,20000,40000],streak:[5,14,30,60,120,240,365,730,1460,2920,5840],days:[7,21,60,150,300,600,1000,2000,4000,8000,15000],sessions:[8,20,50,120,300,600,1200,2500,6000,12000,25000],journals:[10,25,60,150,300,600,1200,2500,6000,12000,25000],moods:[10,25,60,150,300,600,1200,2500,6000,12000,25000],studyDays:[5,14,40,100,220,450,800,1500,3000,6000,12000],dailyStudy:[120,240,360,480,600,720,720,720,720,720,720],xp:[150,500,2000,7500,20000,50000,100000,250000,750000,2000000,5000000],perfectDays:[5,15,40,100,250,600,1200,2500,6000,12000,25000]};
+        if(difficultyFloors[key]?.[ti])threshold=Math.max(threshold,difficultyFloors[key][ti]);
         const cond=d=>compareNum(achievementMetric(d,key),'>=',threshold);
         group.items.push({id:`hard${String(num).padStart(3,'0')}`,xp:[3,6,10,16,25,40,65,100,180,300,500][ti],name,tier:meta.title,desc,icon:icons[(num-1)%icons.length],metric:key,threshold, difficulty:meta.id, cond});
       }

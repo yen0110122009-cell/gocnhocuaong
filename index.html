@@ -693,8 +693,16 @@ SCHEDULE|2026-08-10|20:00|Ôn bài|Học tập"></textarea>
   <div class="actions" style="margin-top:10px">
     <button class="btn light" onclick="exportDataJSON()">📥 Xuất file Backup (JSON)</button><button class="btn light" onclick="exportWholeProjectStable()">📦 Xuất toàn bộ dự án (JSON)</button>
     <button class="btn light" onclick="importDataJSONPrompt()">📤 Nhập file Backup (JSON)</button>
+    <button class="btn light" onclick="window.studyEmpireAutoBackup?.downloadLatest()">💾 Tải bản sao tự động mới nhất</button>
+    <button class="btn light" onclick="window.studyEmpireAutoBackup?.restorePrompt()">♻️ Khôi phục bản sao tự động</button>
     <button class="btn light" id="resetAll">🔐 Cấp lại mã thành viên</button>
   </div>
+ </div>
+ <div class="card" style="margin-top:18px">
+  <h2>🛡️ Sao lưu tự động chống mất dữ liệu</h2>
+  <p class="muted">Mỗi lần tải hoặc ghi dữ liệu với Supabase, ứng dụng tự lưu một bản sao cục bộ trước thao tác đồng bộ. Bản sao được lưu trong trình duyệt, giữ tối đa 12 phiên bản gần nhất và không chứa phiên đăng nhập.</p>
+  <div id="autoBackupStatus" class="kpi">Đang kiểm tra bản sao tự động...</div>
+  <div id="autoBackupList" style="display:grid;gap:6px;margin-top:8px"></div>
  </div>
  <div class="card" style="margin-top:18px">
   <h2>📎 Dữ liệu Excel / Google Sheets</h2>

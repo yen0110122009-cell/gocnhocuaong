@@ -67,6 +67,23 @@ test('nội dung Kết ngày và Nhật ký giữ nguyên xuống dòng khi lưu
   assert.match(cssSource, /\.history-v21-preview\{[^}]*white-space:pre-wrap/);
 });
 
+test('các ngưỡng thành tích cơ bản đã được nâng lên nhưng vẫn giữ nguyên cơ chế ID', () => {
+  assert.match(source, /const difficultyFloors=\{/);
+  assert.match(source, /tasks:\[8,20,50,120/);
+  assert.match(source, /habits:\[15,40,100,250/);
+  assert.match(source, /streak:\[5,14,30,60/);
+  assert.match(source, /if\(difficultyFloors\[key\]\?\.\[ti\]\)threshold=Math\.max\(threshold,difficultyFloors\[key\]\[ti\]\)/);
+});
+
+test('sao lưu tự động được móc vào đồng bộ Supabase và có khôi phục', () => {
+  assert.match(source, /captureSnapshot\(snapshot,'before-cloud-write'\)/);
+  assert.match(source, /captureCurrent\('before-cloud-pull'\)/);
+  assert.match(source, /captureSnapshot\(\{state:applied\.state,external:applied\.external,meta:applied\.meta\},'after-cloud-write'\)/);
+  assert.match(source, /study_empire_auto_backup_v1/);
+  assert.match(source, /indexedDB\.open\(DB_NAME,1\)/);
+  assert.match(source, /restorePrompt/);
+});
+
 test('nhiệm vụ thủ công không bị chặn bởi điều kiện nhiệm vụ tự động', () => {
   const latestClaimStart = source.lastIndexOf('claimCustomQuest=function');
   const latestClaimEnd = source.indexOf('\n  renderQuestBoard=function', latestClaimStart);
