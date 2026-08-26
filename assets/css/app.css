@@ -966,7 +966,7 @@ html,body{overflow-x:hidden}
 /* Việc hôm nay: đánh dấu hoàn thành ngay trên Tổng quan, không giới hạn số lượng mục. */
 .today-dashboard-item{cursor:pointer;transition:background .16s ease,opacity .16s ease}
 .today-dashboard-item:hover{background:rgba(255,255,255,.48);border-radius:10px}
-.today-dashboard-todo-check,.today-dashboard-schedule-check{flex:0 0 auto;width:19px;height:19px;margin:3px 0 0 12px;accent-color:var(--green-dark);cursor:pointer}.today-dashboard-schedule-item .today-dashboard-item-marker{background:color-mix(in srgb,var(--green-light) 70%,var(--pink) 30%)}
+.today-dashboard-todo-check,.today-dashboard-schedule-check{flex:0 0 19px!important;width:19px!important;min-width:19px!important;max-width:19px!important;height:19px;margin:3px 0 0 12px;box-sizing:border-box;accent-color:var(--green-dark);cursor:pointer}.today-dashboard-item-main{display:block;min-width:0;flex:1 1 auto;width:auto}.today-dashboard-schedule-item .today-dashboard-item-marker{background:color-mix(in srgb,var(--green-light) 70%,var(--pink) 30%)}
 .today-dashboard-item.done{opacity:.78}
 .today-dashboard-item.done .today-dashboard-item-main,.today-dashboard-item.done .today-dashboard-item-title,.today-dashboard-item.done .today-dashboard-item-meta{text-decoration-line:line-through;color:var(--muted)}
 .today-dashboard-item.done .today-dashboard-item-marker{background:var(--green-light);color:var(--green-dark)}
