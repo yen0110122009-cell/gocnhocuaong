@@ -1,20 +1,30 @@
-const STATIC_CACHE = 'gocnhocuaong-static-v8';
-const STATIC_ASSETS = [
-  './assets/css/app.css',
-  './assets/js/app.js'
+const CACHE_NAME = 'gocnhocuaong-pwa-v9';
+const PRECACHE = [
+  './',
+  './index.html',
+  './manifest.webmanifest',
+  './assets/css/app.css?v=9',
+  './assets/js/app.js',
+  './assets/js/sw-register.js?v=9',
+  './assets/pwa/icon-192.png',
+  './assets/pwa/icon-512.png'
 ];
+
+const toUrl = path => new URL(path, self.registration.scope).toString();
+
+async function cacheAsset(cache, path) {
+  const url = new URL(path, self.registration.scope);
+  url.searchParams.set('sw-refresh', CACHE_NAME);
+  const response = await fetch(url.toString(), { cache: 'no-store' });
+  if (!response.ok) throw new Error(`Không thể tải tài nguyên PWA: ${path}`);
+  await cache.put(toUrl(path), response);
+}
 
 self.addEventListener('install', event => {
   event.waitUntil(
-    caches.open(STATIC_CACHE).then(async cache => {
-      await Promise.all(STATIC_ASSETS.map(async asset => {
-        const url = new URL(asset, self.registration.scope);
-        url.searchParams.set('sw-refresh', STATIC_CACHE);
-        const response = await fetch(url.toString(), { cache: 'reload' });
-        if (!response.ok) throw new Error(`Không thể tải asset: ${asset}`);
-        await cache.put(new Request(new URL(asset, self.registration.scope).toString()), response);
-      }));
-    }).then(() => self.skipWaiting())
+    caches.open(CACHE_NAME)
+      .then(cache => Promise.all(PRECACHE.map(path => cacheAsset(cache, path))))
+      .then(() => self.skipWaiting())
   );
 });
 
@@ -22,40 +32,58 @@ self.addEventListener('activate', event => {
   event.waitUntil(
     caches.keys()
       .then(keys => Promise.all(
-        keys.filter(key => key.startsWith('gocnhocuaong-static-') && key !== STATIC_CACHE)
+        keys
+          .filter(key => key.startsWith('gocnhocuaong-') && key !== CACHE_NAME)
           .map(key => caches.delete(key))
       ))
       .then(() => self.clients.claim())
   );
 });
 
+async function networkFirst(request, fallbackPath) {
+  const cache = await caches.open(CACHE_NAME);
+  try {
+    const response = await fetch(request, { cache: 'no-store' });
+    if (response.ok) await cache.put(request, response.clone());
+    return response;
+  } catch (error) {
+    return (await cache.match(request)) || (await cache.match(toUrl(fallbackPath)));
+  }
+}
+
+async function cacheFirst(request) {
+  const cache = await caches.open(CACHE_NAME);
+  const cached = await cache.match(request);
+  if (cached) return cached;
+  const response = await fetch(request);
+  if (response.ok) await cache.put(request, response.clone());
+  return response;
+}
+
 self.addEventListener('fetch', event => {
   const request = event.request;
   if (request.method !== 'GET') return;
 
   const url = new URL(request.url);
-  const isSameOrigin = url.origin === self.location.origin;
-  const isStaticAsset = isSameOrigin &&
-    (url.pathname.endsWith('/assets/css/app.css') || url.pathname.endsWith('/assets/js/app.js'));
-  if (!isStaticAsset) return;
+  if (url.origin !== self.location.origin) return;
 
-  event.respondWith(
-    caches.open(STATIC_CACHE).then(async cache => {
-      const cached = await cache.match(request);
-      const isAppScript = url.pathname.endsWith('/assets/js/app.js');
-      if (isAppScript) {
-        try {
-          const response = await fetch(request, {cache:'no-store'});
-          if (response && response.ok) await cache.put(request, response.clone());
-          return response;
-        } catch (error) {
-          return cached || fetch(request);
-        }
-      }
-      if (cached) return cached;
-      const response = await fetch(request);
-      if (response && response.ok) await cache.put(request, response.clone());
-      return response;
-    })
-  );
+  const isNavigation = request.mode === 'navigate' || request.destination === 'document';
+  const isAppScript = url.pathname.endsWith('/assets/js/app.js');
+  const isPwaAsset = url.pathname.endsWith('/manifest.webmanifest') ||
+    url.pathname.endsWith('/assets/css/app.css') ||
+    url.pathname.endsWith('/assets/js/sw-register.js') ||
+    url.pathname.endsWith('/assets/pwa/icon-192.png') ||
+    url.pathname.endsWith('/assets/pwa/icon-512.png');
+
+  if (isNavigation) {
+    event.respondWith(networkFirst(request, './index.html'));
+    return;
+  }
+
+  if (isAppScript) {
+    event.respondWith(networkFirst(request, './assets/js/app.js'));
+    return;
+  }
+
+  if (isPwaAsset) event.respondWith(cacheFirst(request));
 });
