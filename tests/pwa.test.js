@@ -25,30 +25,27 @@ await test('manifest PWA có scope, standalone, icon và shortcut hợp lệ', (
 await test('index liên kết manifest, icon và service worker có cache-buster mới', () => {
   assert.match(html, /rel="manifest" href="\.\/manifest\.webmanifest"/);
   assert.match(html, /apple-touch-icon/);
-  assert.match(html, /assets\/css\/app\.css\?v=10/);
-  assert.match(html, /sw-register\.js\?v=10/);
+  assert.match(html, /assets\/css\/app\.css\?v=11/);
+  assert.match(html, /sw-register\.js\?v=11/);
 });
 
-await test('website áp dụng ảnh nền vuông mới', () => {
-  assert.match(css, /bee-study-background\.png/);
-  assert.match(css, /background-size:cover/);
-  assert.match(css, /background-repeat:no-repeat/);
+await test('website không dùng ảnh chú ong làm nền phía sau trang', () => {
+  assert.doesNotMatch(css, /bee-study-background\.png/);
+  assert.match(css, /background:var\(--bg-gradient\)/);
 });
 
 await test('service worker cache shell và có fallback offline', () => {
-  assert.match(worker, /gocnhocuaong-pwa-v10/);
-  assert.match(worker, /app\.css\?v=10/);
-  assert.match(worker, /sw-register\.js\?v=10/);
+  assert.match(worker, /gocnhocuaong-pwa-v11/);
+  assert.match(worker, /app\.css\?v=11/);
+  assert.match(worker, /sw-register\.js\?v=11/);
   assert.match(worker, /manifest\.webmanifest/);
   assert.match(worker, /icon-192\.png/);
-  assert.match(worker, /bee-study-background\.png/);
   assert.match(worker, /request\.mode === 'navigate'/);
   assert.match(worker, /networkFirst/);
   assert.match(worker, /self\.clients\.claim/);
 });
 
 await test('icon PWA tồn tại đúng kích thước', () => {
-  assert.ok(fs.existsSync(path.join(root, 'assets/pwa/bee-study-background.png')));
   for (const [file, width, height] of [['assets/pwa/icon-192.png', 192, 192], ['assets/pwa/icon-512.png', 512, 512]]) {
     const header = fs.readFileSync(path.join(root, file));
     assert.equal(header.readUInt32BE(16), width);

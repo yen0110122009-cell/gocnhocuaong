@@ -1,14 +1,13 @@
-const CACHE_NAME = 'gocnhocuaong-pwa-v10';
+const CACHE_NAME = 'gocnhocuaong-pwa-v11';
 const PRECACHE = [
   './',
   './index.html',
   './manifest.webmanifest',
-  './assets/css/app.css?v=10',
+  './assets/css/app.css?v=11',
   './assets/js/app.js',
-  './assets/js/sw-register.js?v=10',
+  './assets/js/sw-register.js?v=11',
   './assets/pwa/icon-192.png',
-  './assets/pwa/icon-512.png',
-  './assets/pwa/bee-study-background.png'
+  './assets/pwa/icon-512.png'
 ];
 
 const toUrl = path => new URL(path, self.registration.scope).toString();
@@ -74,8 +73,7 @@ self.addEventListener('fetch', event => {
     url.pathname.endsWith('/assets/css/app.css') ||
     url.pathname.endsWith('/assets/js/sw-register.js') ||
     url.pathname.endsWith('/assets/pwa/icon-192.png') ||
-    url.pathname.endsWith('/assets/pwa/icon-512.png') ||
-    url.pathname.endsWith('/assets/pwa/bee-study-background.png');
+    url.pathname.endsWith('/assets/pwa/icon-512.png');
 
   if (isNavigation) {
     event.respondWith(networkFirst(request, './index.html'));

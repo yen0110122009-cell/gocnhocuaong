@@ -77,7 +77,7 @@ nav .navbtn.active,.btn.primary,.btn.danger{background:linear-gradient(135deg,va
 
 
 *{box-sizing:border-box}
-body{margin:0;background:var(--bg-gradient);background-image:url("../pwa/bee-study-background.png"),var(--bg-gradient);background-size:cover,280% 280%;background-position:center center,0% 30%;background-repeat:no-repeat,repeat;background-attachment:fixed,scroll;color:var(--ink);font-family:Inter,system-ui,-apple-system,"Segoe UI","Noto Sans",Arial,sans-serif;transition:background .8s ease;animation:none;position:relative}/* Emoji fallback riêng để thiết bị có bộ glyph khác nhau vẫn hiển thị ổn định. */
+body{margin:0;background:var(--bg-gradient);background-size:280% 280%;background-position:0% 30%;background-repeat:repeat;background-attachment:scroll;color:var(--ink);font-family:Inter,system-ui,-apple-system,"Segoe UI","Noto Sans",Arial,sans-serif;transition:background .8s ease;animation:none;position:relative}/* Emoji fallback riêng để thiết bị có bộ glyph khác nhau vẫn hiển thị ổn định. */
 .emoji,.mood-icon,.achievement-icon,.bee,.ui-icon-fallback{font-family:"Noto Color Emoji","Apple Color Emoji","Segoe UI Emoji","Segoe UI Symbol",sans-serif}
 .ui-icon{display:inline-block;width:1.05em;height:1.05em;vertical-align:-.16em;flex:0 0 auto;stroke:currentColor;stroke-width:1.8;fill:none;stroke-linecap:round;stroke-linejoin:round}
 .navbtn .ui-icon{margin-right:5px;vertical-align:-.18em}
